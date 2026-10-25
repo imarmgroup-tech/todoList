@@ -1,0 +1,51 @@
+/* --- Custom Styles for Todo App & Telegram Bot --- */
+
+/* กำหนดฟอนต์หลักและพื้นหลัง */
+body {
+    font-family: 'Sarabun', system-ui, -apple-system, sans-serif;
+    background-color: #030712; /* slate-950 */
+    color: #f8fafc; /* slate-50 */
+    min-height: 100vh;
+    margin: 0;
+    padding: 0;
+}
+
+/* Glassmorphism Panel Effect */
+.glass-panel {
+    background: rgba(15, 23, 42, 0.75); /* slate-900 with opacity */
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid rgba(51, 65, 85, 0.4); /* slate-700 border */
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+}
+
+::-webkit-scrollbar-track {
+    background: #090d16;
+}
+
+::-webkit-scrollbar-thumb {
+    background: #1e293b; /* slate-800 */
+    border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: #334155; /* slate-700 */
+}
+
+/* Telegram Brand Color Utility */
+.bg-telegram {
+    background-color: #229ED9;
+}
+
+.text-telegram {
+    color: #229ED9;
+}
+
+.border-telegram {
+    border-color: #229ED9;
+}
