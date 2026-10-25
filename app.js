@@ -103,7 +103,6 @@ function subscribeRealtime() {
     realtimeSubscription = supabaseClient
         .channel('public:todos')
         .on('postgres_changes', { event: '*', schema: 'public', table: 'todos' }, payload => {
-            console.log('Realtime Event Received:', payload);
             fetchTasksFromSupabase();
             showToast('ซิงค์ข้อมูลเรียลไทม์สำเร็จ ⚡', 'success');
         })
