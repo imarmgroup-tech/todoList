@@ -7,7 +7,8 @@ let realtimeSubscription = null;
 // ตั้งค่า Supabase URL และ Anon Key แบบถาวร
 let config = {
     url: 'https://ccdvahuhcfpfxtulqbmc.supabase.co',
-    key: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...' // ใส่ Anon Key ตัวเต็มของคุณที่นี่
+    key: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNjZHZhaHVoY2ZwZnh0dWxxYm1jIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTI5MzQ5NDIsImV4cCI6MjEwODUxMDk0Mn0.MCqJ4iDt9Y0A0V42nloYlIuV3QSSjmEBgauZ4Tn-oqc
+' // ใส่ Anon Key ตัวเต็มของคุณที่นี่
 };
 
 // --- Window Onload ---
