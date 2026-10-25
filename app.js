@@ -117,8 +117,8 @@ function loadFallbackLocalTasks() {
         tasks = JSON.parse(local);
     } else {
         tasks = [
-            { id: '1', title: 'ตัวอย่างงาน: เตรียมสไลด์นำเสนอโปรเจกต์', priority: 'high', category: 'Work', due_time: '14:00', completed: false, source: 'manual', created_at: new Date().toISOString() },
-            { id: '2', title: 'ตัวอย่างงาน: ออกกำลังกายตอนเย็น', priority: 'low', category: 'Personal', due_time: '18:30', completed: true, source: 'telegram', created_at: new Date().toISOString() }
+            { id: '1', title: 'ตัวอย่างงาน: เตรียมสไลด์นำเสนอโปรเจกต์', priority: 'high', category: 'Work', due_date: '2026-10-31', due_time: '14:00', completed: false, source: 'manual', created_at: new Date().toISOString() },
+            { id: '2', title: 'ตัวอย่างงาน: ออกกำลังกายตอนเย็น', priority: 'low', category: 'Personal', due_date: null, due_time: '18:30', completed: true, source: 'telegram', created_at: new Date().toISOString() }
         ];
     }
     renderTasks();
@@ -135,11 +135,13 @@ async function handleAddTask(e) {
     const titleInput = document.getElementById('task-title');
     const priorityInput = document.getElementById('task-priority');
     const categoryInput = document.getElementById('task-category');
+    const dueDateInput = document.getElementById('task-due-date');
     const dueTimeInput = document.getElementById('task-due-time');
 
     const title = titleInput ? titleInput.value.trim() : '';
     const priority = priorityInput ? priorityInput.value : 'medium';
     const category = categoryInput ? (categoryInput.value.trim() || 'Work') : 'Work';
+    const due_date = dueDateInput ? dueDateInput.value : null;
     const due_time = dueTimeInput ? dueTimeInput.value : null;
 
     if (!title) return;
@@ -148,6 +150,7 @@ async function handleAddTask(e) {
         title,
         priority,
         category,
+        due_date: due_date || null,
         due_time: due_time || null,
         completed: false,
         source: 'manual'
@@ -160,6 +163,7 @@ async function handleAddTask(e) {
         } else {
             showToast('เพิ่มงานสำเร็จ!', 'success');
             if (titleInput) titleInput.value = '';
+            if (dueDateInput) dueDateInput.value = '';
             if (dueTimeInput) dueTimeInput.value = '';
             fetchTasksFromSupabase();
         }
@@ -221,6 +225,7 @@ function openEditModal(id) {
     document.getElementById('edit-task-id').value = task.id;
     document.getElementById('edit-task-title').value = task.title;
     document.getElementById('edit-task-priority').value = task.priority;
+    document.getElementById('edit-task-due-date').value = task.due_date || '';
     document.getElementById('edit-task-due-time').value = task.due_time || '';
     toggleModal('edit-task-modal');
 }
@@ -229,12 +234,13 @@ async function saveEditTask() {
     const id = document.getElementById('edit-task-id').value;
     const title = document.getElementById('edit-task-title').value.trim();
     const priority = document.getElementById('edit-task-priority').value;
+    const due_date = document.getElementById('edit-task-due-date').value;
     const due_time = document.getElementById('edit-task-due-time').value;
 
     if (!title) return;
 
     if (supabaseClient) {
-        const { error } = await supabaseClient.from('todos').update({ title, priority, due_time }).eq('id', id);
+        const { error } = await supabaseClient.from('todos').update({ title, priority, due_date, due_time }).eq('id', id);
         if (error) {
             showToast('แก้ไขข้อมูลไม่สำเร็จ', 'error');
         } else {
@@ -247,6 +253,7 @@ async function saveEditTask() {
         if (task) {
             task.title = title;
             task.priority = priority;
+            task.due_date = due_date;
             task.due_time = due_time;
             saveLocalFallbackTasks();
             renderTasks();
@@ -286,8 +293,8 @@ function renderTasks() {
         if (sortVal === 'priority') {
             const weight = { high: 3, medium: 2, low: 1 };
             return (weight[b.priority] || 2) - (weight[a.priority] || 2);
-        } else if (sortVal === 'due_time') {
-            return (a.due_time || '99:99').localeCompare(b.due_time || '99:99');
+        } else if (sortVal === 'due_date') {
+            return (a.due_date || '9999-12-31').localeCompare(b.due_date || '9999-12-31');
         } else {
             return new Date(b.created_at || 0) - new Date(a.created_at || 0);
         }
@@ -335,9 +342,10 @@ function renderTasks() {
                             ${priorityBadge}
                             ${sourceBadge}
                         </div>
-                        <div class="flex items-center gap-3 text-[11px] text-slate-400 mt-1">
+                        <div class="flex items-center gap-3 text-[11px] text-slate-400 mt-1 flex-wrap">
                             <span class="bg-slate-900 px-2 py-0.5 rounded border border-slate-800">${escapeHtml(t.category || 'Work')}</span>
-                            ${t.due_time ? `<span class="flex items-center gap-1"><i class="fa-regular fa-clock text-rose-400"></i> ${t.due_time}</span>` : ''}
+                            ${t.due_date ? `<span class="flex items-center gap-1 text-rose-400"><i class="fa-regular fa-calendar"></i> ${t.due_date}</span>` : ''}
+                            ${t.due_time ? `<span class="flex items-center gap-1 text-amber-400"><i class="fa-regular fa-clock"></i> ${t.due_time}</span>` : ''}
                         </div>
                     </div>
                 </div>
@@ -407,14 +415,19 @@ async function handleSimulateTelegram(e) {
     let category = 'Work';
     if (text.includes('#Personal')) category = 'Personal';
 
-    const cleanTitle = text.replace('/add', '').replace(/#\w+/g, '').replace(/@\d{2}:\d{2}/g, '').trim();
     const timeMatch = text.match(/@(\d{2}:\d{2})/);
     const due_time = timeMatch ? timeMatch[1] : null;
+
+    const dateMatch = text.match(/@(\d{4}-\d{2}-\d{2})/);
+    const due_date = dateMatch ? dateMatch[1] : null;
+
+    let cleanTitle = text.replace('/add', '').replace(/#\w+/g, '').replace(/@\d{2}:\d{2}/g, '').replace(/@\d{4}-\d{2}-\d{2}/g, '').trim();
 
     const newTelegramTask = {
         title: cleanTitle || 'งานจาก Telegram Bot',
         priority,
         category,
+        due_date,
         due_time,
         completed: false,
         source: 'telegram'
