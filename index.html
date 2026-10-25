@@ -1,1 +1,1039 @@
+<!DOCTYPE html>
+<html lang="th" class="h-full bg-slate-950 text-slate-100 dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Daily Task & Priority Tracker - Supabase & Telegram Sync</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Google Fonts: Prompt -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Supabase JS v2 UMD CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Prompt', 'sans-serif'],
+                    },
+                    colors: {
+                        brand: {
+                            50: '#fff1f2',
+                            500: '#f43f5e',
+                            600: '#e11d48',
+                            700: '#be123c',
+                        },
+                        telegram: '#229ED9',
+                        supabase: '#3ECF8E'
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body { font-family: 'Prompt', sans-serif; }
+        .glass-panel {
+            background: rgba(15, 23, 42, 0.75);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+        }
+        .glass-modal {
+            background: rgba(10, 15, 29, 0.92);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+        }
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: rgba(15, 23, 42, 0.6); }
+        ::-webkit-scrollbar-thumb { background: rgba(51, 65, 85, 0.8); border-radius: 9999px; }
+        ::-webkit-scrollbar-thumb:hover { background: rgba(71, 85, 105, 1); }
+    </style>
+</head>
+<body class="h-full flex flex-col bg-slate-950 text-slate-100 selection:bg-brand-600 selection:text-white">
 
+    <!-- Header Bar -->
+    <header class="sticky top-0 z-30 border-b border-slate-800/80 glass-panel px-4 lg:px-8 py-3.5">
+        <div class="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-4">
+            
+            <!-- Logo & Title -->
+            <div class="flex items-center space-x-3">
+                <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-rose-600 to-amber-500 flex items-center justify-center shadow-lg shadow-rose-600/20 text-white font-bold text-lg">
+                    <i class="fa-solid fa-list-check"></i>
+                </div>
+                <div>
+                    <div class="flex items-center gap-2">
+                        <h1 class="text-lg font-bold leading-tight bg-gradient-to-r from-white via-slate-200 to-slate-400 bg-clip-text text-transparent">
+                            Task Priority Tracker
+                        </h1>
+                        <span class="text-[10px] bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-2 py-0.5 rounded-full flex items-center gap-1 font-medium">
+                            <i class="fa-solid fa-bolt text-[9px]"></i> Supabase Realtime
+                        </span>
+                    </div>
+                    <p class="text-xs text-slate-400 flex items-center gap-1.5 mt-0.5">
+                        <i class="fa-regular fa-calendar text-rose-400"></i>
+                        <span id="current-date-str">กำลังโหลดวันที่...</span>
+                    </p>
+                </div>
+            </div>
+
+            <!-- Header Actions & Database Status -->
+            <div class="flex items-center gap-3 flex-wrap">
+                <!-- Progress Mini Badge -->
+                <div class="hidden md:flex items-center gap-3 bg-slate-900/90 px-3.5 py-1.5 rounded-xl border border-slate-800">
+                    <span class="text-xs text-slate-400">ความคืบหน้า:</span>
+                    <div class="w-20 bg-slate-800 rounded-full h-2 overflow-hidden">
+                        <div id="header-progress-bar" class="bg-gradient-to-r from-rose-500 to-emerald-400 h-2 rounded-full transition-all duration-500" style="width: 0%"></div>
+                    </div>
+                    <span id="header-progress-text" class="text-xs font-semibold text-emerald-400">0%</span>
+                </div>
+
+                <!-- Database Config Connection Badge -->
+                <button onclick="toggleModal('settings-modal')" class="flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-medium border border-slate-800 bg-slate-900 hover:bg-slate-800 transition cursor-pointer" id="db-status-badge">
+                    <span class="w-2.5 h-2.5 rounded-full bg-amber-500 animate-pulse" id="db-status-dot"></span>
+                    <span id="db-status-text" class="text-slate-300">Supabase: รอต้งค่า Key</span>
+                    <i class="fa-solid fa-sliders text-slate-400 ml-1"></i>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Container -->
+    <main class="flex-1 max-w-7xl w-full mx-auto p-4 md:p-6 lg:p-8 grid grid-cols-1 lg:grid-cols-12 gap-6">
+
+        <!-- Left Main Area: Task Management & Filter (8 Cols) -->
+        <section class="lg:col-span-8 space-y-5">
+            
+            <!-- Quick Add Task Form -->
+            <div class="glass-panel p-4 rounded-2xl shadow-xl border-l-4 border-l-rose-500">
+                <form id="add-task-form" onsubmit="handleAddTask(event)" class="space-y-3">
+                    <div class="flex flex-col sm:flex-row gap-2.5">
+                        <div class="relative flex-1">
+                            <i class="fa-solid fa-pen-to-square absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
+                            <input type="text" id="task-title" required placeholder="ระบุงานที่จะต้องทำ... (เช่น ส่งสรุปงบประมาณไตรมาส 3)" 
+                                   class="w-full bg-slate-950 text-sm text-slate-100 placeholder-slate-500 pl-9 pr-4 py-2.5 rounded-xl border border-slate-800 focus:outline-none focus:border-rose-500 transition">
+                        </div>
+                        <button type="submit" id="btn-add-submit" class="bg-gradient-to-r from-rose-600 to-rose-500 hover:from-rose-500 hover:to-rose-400 text-white px-5 py-2.5 rounded-xl font-medium text-sm flex items-center justify-center gap-2 transition-all shadow-lg shadow-rose-600/20 active:scale-95">
+                            <i class="fa-solid fa-plus text-xs"></i>
+                            <span>เพิ่มงาน</span>
+                        </button>
+                    </div>
+
+                    <!-- Metadata inputs: Priority, Category, Due Date/Time -->
+                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-2.5 pt-1">
+                        <div>
+                            <label class="block text-[11px] text-slate-400 mb-1">ความสำคัญ (Priority):</label>
+                            <select id="task-priority" class="w-full bg-slate-950 text-xs text-slate-200 px-3 py-2 rounded-xl border border-slate-800 focus:outline-none focus:border-rose-500">
+                                <option value="high">🔴 High (สำคัญมาก)</option>
+                                <option value="medium" selected>🟡 Medium (ปานกลาง)</option>
+                                <option value="low">🟢 Low (ทั่วไป)</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-[11px] text-slate-400 mb-1">หมวดหมู่ (Category):</label>
+                            <input type="text" id="task-category" placeholder="เช่น Work, Personal" value="Work" 
+                                   class="w-full bg-slate-950 text-xs text-slate-200 px-3 py-2 rounded-xl border border-slate-800 focus:outline-none focus:border-rose-500">
+                        </div>
+                        <div>
+                            <label class="block text-[11px] text-slate-400 mb-1">กำหนดเวลา (Due Time):</label>
+                            <input type="time" id="task-due-time" class="w-full bg-slate-950 text-xs text-slate-200 px-3 py-2 rounded-xl border border-slate-800 focus:outline-none focus:border-rose-500">
+                        </div>
+                    </div>
+                </form>
+            </div>
+
+            <!-- Filter & Sort Header -->
+            <div class="flex flex-wrap items-center justify-between gap-3 bg-slate-900/60 p-3 rounded-2xl border border-slate-800">
+                <!-- Filter Tabs -->
+                <div class="flex items-center gap-1 overflow-x-auto pb-1 sm:pb-0 w-full sm:w-auto">
+                    <button onclick="setFilter('all')" id="filter-all" class="filter-btn px-3 py-1.5 rounded-xl text-xs font-medium transition bg-rose-600 text-white">ทั้งหมด (<span id="count-all">0</span>)</button>
+                    <button onclick="setFilter('pending')" id="filter-pending" class="filter-btn px-3 py-1.5 rounded-xl text-xs font-medium text-slate-400 hover:text-slate-200 hover:bg-slate-800 transition">รอดำเนินการ (<span id="count-pending">0</span>)</button>
+                    <button onclick="setFilter('completed')" id="filter-completed" class="filter-btn px-3 py-1.5 rounded-xl text-xs font-medium text-slate-400 hover:text-slate-200 hover:bg-slate-800 transition">เสร็จแล้ว (<span id="count-completed">0</span>)</button>
+                    <button onclick="setFilter('telegram')" id="filter-telegram" class="filter-btn px-3 py-1.5 rounded-xl text-xs font-medium text-slate-400 hover:text-slate-200 hover:bg-slate-800 transition">Telegram 📲</button>
+                </div>
+
+                <!-- Sorting Select -->
+                <div class="flex items-center gap-2 text-xs text-slate-400 ml-auto sm:ml-0">
+                    <i class="fa-solid fa-arrow-down-wide-short text-slate-500"></i>
+                    <span>เรียงตาม:</span>
+                    <select id="sort-select" onchange="renderTasks()" class="bg-slate-950 text-slate-200 text-xs border border-slate-800 rounded-lg px-2.5 py-1 focus:outline-none focus:border-rose-500">
+                        <option value="priority">ระดับความสำคัญ (High -> Low)</option>
+                        <option value="due_time">เวลาที่กำหนด (Due Time)</option>
+                        <option value="created_at">เวลาที่สร้างล่าสุด</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- Task List Container -->
+            <div id="tasks-container" class="space-y-3 min-h-[250px]">
+                <!-- Tasks loaded from Supabase or Local Fallback -->
+            </div>
+
+        </section>
+
+        <!-- Right Side Panel: Telegram Simulator & Analytics & Guide (4 Cols) -->
+        <section class="lg:col-span-4 space-y-6">
+
+            <!-- Telegram Live Simulator Widget -->
+            <div class="glass-panel rounded-2xl p-5 shadow-xl border-t-2 border-t-telegram relative overflow-hidden">
+                <div class="flex items-center justify-between mb-3">
+                    <div class="flex items-center gap-2">
+                        <i class="fa-brands fa-telegram text-telegram text-xl"></i>
+                        <h2 class="font-bold text-slate-200 text-sm">Telegram Bot Simulator</h2>
+                    </div>
+                    <span class="text-[10px] bg-telegram/20 text-telegram border border-telegram/30 px-2 py-0.5 rounded-full font-medium">Live Insert</span>
+                </div>
+                
+                <p class="text-xs text-slate-400 mb-3">
+                    ทดสอบจำลองคำสั่งจาก Telegram Bot ยิงตรงเข้า Supabase
+                </p>
+
+                <form onsubmit="handleSimulateTelegram(event)" class="space-y-2.5">
+                    <div class="relative">
+                        <textarea id="sim-input-text" rows="2" required placeholder="เช่น: /add ประชุมทีมพัฒนาระบบ #high @15:30 #Work" 
+                                class="w-full bg-slate-950 text-slate-200 text-xs p-3 rounded-xl border border-slate-800 focus:outline-none focus:border-telegram resize-none"></textarea>
+                    </div>
+                    
+                    <div class="flex flex-wrap gap-1 text-[11px]">
+                        <span class="text-slate-500 self-center">ตัวอย่าง:</span>
+                        <button type="button" onclick="fillSim('/add ออกกำลังกายวิ่ง 5km #low @07:00 #Personal')" class="bg-slate-800 hover:bg-slate-700 px-2 py-0.5 rounded text-slate-300 transition">🏃 วิ่งยามเช้า</button>
+                        <button type="button" onclick="fillSim('/add ส่งใบเสนอราคาลูกค้า #high @11:00 #Work')" class="bg-slate-800 hover:bg-slate-700 px-2 py-0.5 rounded text-slate-300 transition">📄 ส่งเอกสาร</button>
+                    </div>
+
+                    <button type="submit" id="btn-sim-submit" class="w-full bg-gradient-to-r from-telegram to-sky-600 hover:brightness-110 text-white py-2 rounded-xl text-xs font-medium flex items-center justify-center gap-2 shadow-md transition active:scale-[0.99]">
+                        <i class="fa-solid fa-paper-plane text-xs"></i>
+                        ส่งข้อความเข้า Supabase (Simulate Webhook)
+                    </button>
+                </form>
+            </div>
+
+            <!-- Analytics & Priority Breakdown -->
+            <div class="glass-panel rounded-2xl p-5 shadow-xl space-y-4">
+                <h3 class="font-bold text-slate-200 text-sm flex items-center gap-2">
+                    <i class="fa-solid fa-chart-pie text-rose-500"></i>
+                    สรุปสถิติทั่วไป (Analytics)
+                </h3>
+
+                <!-- Summary Counts Grid -->
+                <div class="grid grid-cols-2 gap-3">
+                    <div class="bg-slate-950/60 p-3 rounded-xl border border-slate-800 text-center">
+                        <div class="text-xl font-bold text-slate-100" id="stat-total">0</div>
+                        <div class="text-[11px] text-slate-400">งานทั้งหมด</div>
+                    </div>
+                    <div class="bg-slate-950/60 p-3 rounded-xl border border-slate-800 text-center">
+                        <div class="text-xl font-bold text-emerald-400" id="stat-completed">0</div>
+                        <div class="text-[11px] text-slate-400">เสร็จสิ้นแล้ว</div>
+                    </div>
+                </div>
+
+                <!-- Priority Breakdown Progress Bars -->
+                <div class="space-y-2 pt-2 border-t border-slate-800 text-xs">
+                    <div class="text-slate-400 mb-2 font-medium">แบ่งตามระดับความสำคัญ:</div>
+                    
+                    <div>
+                        <div class="flex justify-between text-[11px] mb-1">
+                            <span class="text-rose-400 font-medium">High Priority (🔴)</span>
+                            <span id="stat-high-count" class="text-slate-300">0</span>
+                        </div>
+                        <div class="w-full bg-slate-900 rounded-full h-1.5">
+                            <div id="stat-high-bar" class="bg-rose-500 h-1.5 rounded-full transition-all" style="width: 0%"></div>
+                        </div>
+                    </div>
+
+                    <div>
+                        <div class="flex justify-between text-[11px] mb-1">
+                            <span class="text-amber-400 font-medium">Medium Priority (🟡)</span>
+                            <span id="stat-medium-count" class="text-slate-300">0</span>
+                        </div>
+                        <div class="w-full bg-slate-900 rounded-full h-1.5">
+                            <div id="stat-medium-bar" class="bg-amber-400 h-1.5 rounded-full transition-all" style="width: 0%"></div>
+                        </div>
+                    </div>
+
+                    <div>
+                        <div class="flex justify-between text-[11px] mb-1">
+                            <span class="text-emerald-400 font-medium">Low Priority (🟢)</span>
+                            <span id="stat-low-count" class="text-slate-300">0</span>
+                        </div>
+                        <div class="w-full bg-slate-900 rounded-full h-1.5">
+                            <div id="stat-low-bar" class="bg-emerald-400 h-1.5 rounded-full transition-all" style="width: 0%"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Quick Action Links -->
+            <div class="space-y-2">
+                <button onclick="toggleModal('settings-modal')" class="w-full bg-slate-900 hover:bg-slate-800 border border-slate-800 text-slate-300 p-3 rounded-2xl text-xs flex items-center justify-between transition group">
+                    <span class="flex items-center gap-2">
+                        <i class="fa-solid fa-database text-supabase"></i>
+                        ตั้งค่า Supabase Keys & ดึง SQL Script
+                    </span>
+                    <i class="fa-solid fa-chevron-right text-slate-500 group-hover:translate-x-1 transition-transform"></i>
+                </button>
+
+                <button onclick="toggleModal('telegram-guide-modal')" class="w-full bg-slate-900 hover:bg-slate-800 border border-slate-800 text-slate-300 p-3 rounded-2xl text-xs flex items-center justify-between transition group">
+                    <span class="flex items-center gap-2">
+                        <i class="fa-brands fa-telegram text-telegram"></i>
+                        โค้ดเชื่อมต่อ Telegram Edge Function
+                    </span>
+                    <i class="fa-solid fa-chevron-right text-slate-500 group-hover:translate-x-1 transition-transform"></i>
+                </button>
+            </div>
+
+        </section>
+
+    </main>
+
+    <!-- Modal 1: Supabase Configuration & Auto SQL Script -->
+    <div id="settings-modal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md hidden">
+        <div class="glass-modal max-w-2xl w-full rounded-2xl border border-slate-800 shadow-2xl overflow-hidden max-h-[90vh] flex flex-col">
+            
+            <div class="p-5 border-b border-slate-800 flex items-center justify-between">
+                <div class="flex items-center gap-2.5">
+                    <div class="w-8 h-8 rounded-lg bg-emerald-500/20 text-supabase flex items-center justify-center">
+                        <i class="fa-solid fa-database"></i>
+                    </div>
+                    <h3 class="font-bold text-slate-100 text-base">ตั้งค่าการเชื่อมต่อ Supabase Database</h3>
+                </div>
+                <button onclick="toggleModal('settings-modal')" class="text-slate-400 hover:text-white p-1">
+                    <i class="fa-solid fa-xmark text-lg"></i>
+                </button>
+            </div>
+
+            <div class="p-6 overflow-y-auto space-y-6 text-xs text-slate-300">
+                
+                <!-- Keys Input Section -->
+                <div class="bg-slate-900/90 p-4 rounded-xl border border-slate-800 space-y-3">
+                    <h4 class="font-semibold text-slate-200 text-sm">Supabase Credentials</h4>
+                    <div>
+                        <label class="block text-slate-400 mb-1">Supabase URL:</label>
+                        <input type="text" id="cfg-supabase-url" placeholder="https://your-project.supabase.co" 
+                               class="w-full bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-slate-200 font-mono focus:outline-none focus:border-supabase">
+                    </div>
+                    <div>
+                        <label class="block text-slate-400 mb-1">Supabase Anon Key:</label>
+                        <input type="password" id="cfg-supabase-key" placeholder="eyJhY2... (Anon public key)" 
+                               class="w-full bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-slate-200 font-mono focus:outline-none focus:border-supabase">
+                    </div>
+                    
+                    <div class="flex items-center justify-between pt-2">
+                        <button onclick="testSupabaseConnection()" class="bg-slate-800 hover:bg-slate-700 text-slate-200 px-3.5 py-2 rounded-lg font-medium transition flex items-center gap-1.5">
+                            <i class="fa-solid fa-plug text-xs"></i> Test Connection
+                        </button>
+                        <button onclick="saveSupabaseConfig()" class="bg-supabase text-slate-950 hover:bg-emerald-400 font-bold px-4 py-2 rounded-lg transition">
+                            บันทึกการตั้งค่า Key
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Auto SQL Script Generator -->
+                <div class="space-y-3">
+                    <div class="flex items-center justify-between">
+                        <h4 class="font-semibold text-slate-100 text-sm flex items-center gap-2">
+                            <i class="fa-solid fa-code text-rose-500"></i>
+                            SQL Table Schema Script (สำหรับสร้างตารางใน Supabase)
+                        </h4>
+                        <button onclick="copySqlScript()" class="text-xs bg-rose-600/20 text-rose-400 border border-rose-500/30 px-2.5 py-1 rounded-lg hover:bg-rose-600 hover:text-white transition">
+                            <i class="fa-regular fa-copy"></i> คัดลอก SQL
+                        </button>
+                    </div>
+                    
+                    <p class="text-slate-400 text-[11px]">
+                        นำโค้ด SQL ด้านล่างนี้ไปรันในช่อง **SQL Editor** บน Dashboard ของ Supabase เพื่อสร้างตาราง <code class="text-emerald-400 font-mono">todos</code> พร้อมเปิดใช้งาน Realtime:
+                    </p>
+
+                    <pre id="sql-script-code" class="bg-slate-950 p-4 rounded-xl border border-slate-800 text-[11px] font-mono text-emerald-300 overflow-x-auto leading-relaxed">
+-- 1. Create todos table
+CREATE TABLE IF NOT EXISTS public.todos (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    title TEXT NOT NULL,
+    priority TEXT DEFAULT 'medium' CHECK (priority IN ('high', 'medium', 'low')),
+    category TEXT DEFAULT 'General',
+    due_time TEXT,
+    completed BOOLEAN DEFAULT FALSE,
+    source TEXT DEFAULT 'manual',
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- 2. Enable Row Level Security (RLS) & Public Policies for Demo
+ALTER TABLE public.todos ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Allow public read access" ON public.todos FOR SELECT USING (true);
+CREATE POLICY "Allow public insert access" ON public.todos FOR INSERT WITH CHECK (true);
+CREATE POLICY "Allow public update access" ON public.todos FOR UPDATE USING (true);
+CREATE POLICY "Allow public delete access" ON public.todos FOR DELETE USING (true);
+
+-- 3. Enable Realtime Replication for table todos
+ALTER PUBLICATION supabase_realtime ADD TABLE public.todos;</pre>
+                </div>
+
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal 2: Telegram Edge Function Guide -->
+    <div id="telegram-guide-modal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md hidden">
+        <div class="glass-modal max-w-2xl w-full rounded-2xl border border-slate-800 shadow-2xl overflow-hidden max-h-[90vh] flex flex-col">
+            
+            <div class="p-5 border-b border-slate-800 flex items-center justify-between">
+                <div class="flex items-center gap-2.5">
+                    <div class="w-8 h-8 rounded-lg bg-telegram/20 text-telegram flex items-center justify-center">
+                        <i class="fa-brands fa-telegram text-lg"></i>
+                    </div>
+                    <h3 class="font-bold text-slate-100 text-base">คู่มือ Telegram Webhook & Supabase Edge Function</h3>
+                </div>
+                <button onclick="toggleModal('telegram-guide-modal')" class="text-slate-400 hover:text-white p-1">
+                    <i class="fa-solid fa-xmark text-lg"></i>
+                </button>
+            </div>
+
+            <div class="p-6 overflow-y-auto space-y-4 text-xs text-slate-300">
+                <p>
+                    คุณสามารถสร้าง **Supabase Edge Function** เพื่อรับ Webhook จาก Telegram Bot และบันทึกงานลงใน Supabase โดยอัตโนมัติ ซึ่งจะกระตุ้น Realtime Sync บนหน้าเว็บทันที
+                </p>
+
+                <div class="bg-slate-900/90 p-4 rounded-xl border border-slate-800 space-y-2 font-mono text-[11px]">
+                    <div class="text-slate-400">// โค้ดสำหรับ Supabase Edge Function (Deno/TypeScript)</div>
+                    <pre class="bg-slate-950 p-3 rounded-lg text-sky-300 overflow-x-auto">
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+
+Deno.serve(async (req) => {
+  const payload = await req.json()
+  const text = payload.message?.text || ''
+
+  if (text.startsWith('/add')) {
+    const title = text.replace('/add', '').trim()
+    const supabase = createClient(
+      Deno.env.get('SUPABASE_URL')!,
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+    )
+
+    await supabase.from('todos').insert([{
+      title: title || 'งานใหม่จาก Telegram',
+      priority: text.includes('#high') ? 'high' : 'medium',
+      source: 'telegram'
+    }])
+  }
+
+  return new Response('OK', { status: 200 })
+})</pre>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Edit Task Modal -->
+    <div id="edit-task-modal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md hidden">
+        <div class="glass-modal max-w-md w-full rounded-2xl border border-slate-800 p-5 space-y-4 shadow-2xl">
+            <h3 class="font-bold text-slate-100 text-base">แก้ไขรายการงาน</h3>
+            <input type="hidden" id="edit-task-id">
+            
+            <div>
+                <label class="block text-xs text-slate-400 mb-1">ชื่องาน:</label>
+                <input type="text" id="edit-task-title" class="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-xs text-slate-100 focus:outline-none focus:border-rose-500">
+            </div>
+
+            <div class="grid grid-cols-2 gap-3">
+                <div>
+                    <label class="block text-xs text-slate-400 mb-1">ความสำคัญ:</label>
+                    <select id="edit-task-priority" class="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-xs text-slate-100 focus:outline-none focus:border-rose-500">
+                        <option value="high">🔴 High</option>
+                        <option value="medium">🟡 Medium</option>
+                        <option value="low">🟢 Low</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-xs text-slate-400 mb-1">กำหนดเวลา:</label>
+                    <input type="time" id="edit-task-due-time" class="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-xs text-slate-100 focus:outline-none focus:border-rose-500">
+                </div>
+            </div>
+
+            <div class="flex justify-end gap-2 pt-2">
+                <button onclick="toggleModal('edit-task-modal')" class="bg-slate-800 text-slate-300 px-3.5 py-2 rounded-xl text-xs font-medium hover:bg-slate-700">ยกเลิก</button>
+                <button onclick="saveEditTask()" class="bg-rose-600 text-white px-4 py-2 rounded-xl text-xs font-medium hover:bg-rose-500">บันทึกการแก้ไข</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Notification Container -->
+    <div id="toast-container" class="fixed bottom-5 right-5 z-50 space-y-2 pointer-events-none"></div>
+
+    <!-- Application Script Logic -->
+    <script>
+        // --- State Management ---
+        let supabaseClient = null;
+        let tasks = [];
+        let currentFilter = 'all';
+        let realtimeSubscription = null;
+
+        // Default Config Key
+        let config = {
+            url: '',
+            key: ''
+        };
+
+        // --- Window Onload ---
+        window.onload = function() {
+            initDateDisplay();
+            loadStoredConfig();
+            initSupabase();
+        };
+
+        function initDateDisplay() {
+            const now = new Date();
+            document.getElementById('current-date-str').textContent = now.toLocaleDateString('th-TH', { 
+                weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' 
+            });
+        }
+
+        // --- Supabase Client Initialization ---
+        function loadStoredConfig() {
+            const storedUrl = localStorage.getItem('supabase_url');
+            const storedKey = localStorage.getItem('supabase_key');
+
+            if (storedUrl && storedKey) {
+                config.url = storedUrl;
+                config.key = storedKey;
+                document.getElementById('cfg-supabase-url').value = storedUrl;
+                document.getElementById('cfg-supabase-key').value = storedKey;
+            }
+        }
+
+        function initSupabase() {
+            if (!config.url || !config.key) {
+                updateConnectionStatus(false, 'ไม่ได้ระบุ Key');
+                loadFallbackLocalTasks();
+                return;
+            }
+
+            try {
+                // Initialize Supabase JS Client
+                supabaseClient = window.supabase.createClient(config.url, config.key);
+                updateConnectionStatus(true, 'Supabase: เชื่อมต่อแล้ว');
+                
+                // Fetch Initial Data & Subscribe Realtime
+                fetchTasksFromSupabase();
+                subscribeRealtime();
+
+            } catch (err) {
+                console.error("Supabase Init Error:", err);
+                updateConnectionStatus(false, 'เชื่อมต่อไม่สำเร็จ');
+                loadFallbackLocalTasks();
+            }
+        }
+
+        function updateConnectionStatus(isConnected, message) {
+            const dot = document.getElementById('db-status-dot');
+            const text = document.getElementById('db-status-text');
+
+            if (isConnected) {
+                dot.className = 'w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse';
+                text.textContent = message;
+                text.className = 'text-emerald-400 font-medium';
+            } else {
+                dot.className = 'w-2.5 h-2.5 rounded-full bg-amber-500';
+                text.textContent = message;
+                text.className = 'text-slate-400';
+            }
+        }
+
+        // --- Fetch & Realtime Listeners ---
+        async function fetchTasksFromSupabase() {
+            if (!supabaseClient) return;
+
+            const { data, error } = await supabaseClient
+                .from('todos')
+                .select('*')
+                .order('created_at', { ascending: false });
+
+            if (error) {
+                console.error("Error fetching tasks:", error);
+                showToast('ไม่สามารถดึงข้อมูลจาก Supabase ได้ (ใช้นำเสนอข้อมูลสำรอง)', 'error');
+                loadFallbackLocalTasks();
+                return;
+            }
+
+            tasks = data || [];
+            renderTasks();
+            updateAnalytics();
+        }
+
+        function subscribeRealtime() {
+            if (!supabaseClient) return;
+
+            // Remove existing channel if any
+            if (realtimeSubscription) {
+                supabaseClient.removeChannel(realtimeSubscription);
+            }
+
+            // Realtime Listener for table 'todos'
+            realtimeSubscription = supabaseClient
+                .channel('public:todos')
+                .on('postgres_changes', { event: '*', schema: 'public', table: 'todos' }, payload => {
+                    console.log('Realtime Event Received:', payload);
+                    
+                    if (payload.eventType === 'INSERT') {
+                        tasks.unshift(payload.new);
+                        showToast(`⚡ มีงานใหม่เพิ่มเข้ามา: "${payload.new.title}"`, 'info');
+                    } else if (payload.eventType === 'UPDATE') {
+                        const index = tasks.findIndex(t => t.id === payload.new.id);
+                        if (index !== -1) tasks[index] = payload.new;
+                    } else if (payload.eventType === 'DELETE') {
+                        tasks = tasks.filter(t => t.id !== payload.old.id);
+                    }
+
+                    renderTasks();
+                    updateAnalytics();
+                })
+                .subscribe();
+        }
+
+        // Fallback for when Supabase keys are not set
+        function loadFallbackLocalTasks() {
+            const saved = localStorage.getItem('fallback_tasks');
+            if (saved) {
+                tasks = JSON.parse(saved);
+            } else {
+                tasks = [
+                    { id: '1', title: 'ตัวอย่างงาน: ตรวจสอบงบประมาณโครงการ #Work', priority: 'high', category: 'Work', due_time: '14:00', completed: false, source: 'manual', created_at: new Date().toISOString() },
+                    { id: '2', title: 'ตัวอย่างงาน Telegram: สรุปผลการประชุมประจำสัปดาห์', priority: 'medium', category: 'General', due_time: '16:30', completed: true, source: 'telegram', created_at: new Date().toISOString() }
+                ];
+            }
+            renderTasks();
+            updateAnalytics();
+        }
+
+        function saveFallbackToLocal() {
+            if (!supabaseClient) {
+                localStorage.setItem('fallback_tasks', JSON.stringify(tasks));
+            }
+        }
+
+        // --- Task CRUD Handlers ---
+        async function handleAddTask(e) {
+            e.preventDefault();
+            const titleInput = document.getElementById('task-title');
+            const priorityInput = document.getElementById('task-priority');
+            const categoryInput = document.getElementById('task-category');
+            const timeInput = document.getElementById('task-due-time');
+
+            const newObj = {
+                title: titleInput.value.trim(),
+                priority: priorityInput.value,
+                category: categoryInput.value.trim() || 'General',
+                due_time: timeInput.value || null,
+                completed: false,
+                source: 'manual'
+            };
+
+            if (supabaseClient) {
+                const { data, error } = await supabaseClient.from('todos').insert([newObj]).select();
+                if (error) {
+                    showToast('เพิ่มงานไม่สำเร็จ: ' + error.message, 'error');
+                    return;
+                }
+                showToast('เพิ่มงานใหม่ลง Supabase เรียบร้อยแล้ว');
+            } else {
+                newObj.id = Date.now().toString();
+                newObj.created_at = new Date().toISOString();
+                tasks.unshift(newObj);
+                saveFallbackToLocal();
+                renderTasks();
+                updateAnalytics();
+                showToast('เพิ่มงานใหม่ (Local Mode)');
+            }
+
+            titleInput.value = '';
+            timeInput.value = '';
+        }
+
+        async function toggleTaskComplete(id) {
+            const task = tasks.find(t => t.id === id);
+            if (!task) return;
+
+            const nextCompletedState = !task.completed;
+
+            if (supabaseClient) {
+                const { error } = await supabaseClient
+                    .from('todos')
+                    .update({ completed: nextCompletedState })
+                    .eq('id', id);
+
+                if (error) {
+                    showToast('อัปเดตไม่สำเร็จ: ' + error.message, 'error');
+                    return;
+                }
+            } else {
+                task.completed = nextCompletedState;
+                saveFallbackToLocal();
+                renderTasks();
+                updateAnalytics();
+            }
+        }
+
+        async function deleteTask(id) {
+            if (supabaseClient) {
+                const { error } = await supabaseClient.from('todos').delete().eq('id', id);
+                if (error) {
+                    showToast('ลบงานไม่สำเร็จ: ' + error.message, 'error');
+                    return;
+                }
+                showToast('ลบรายการงานเรียบร้อย');
+            } else {
+                tasks = tasks.filter(t => t.id !== id);
+                saveFallbackToLocal();
+                renderTasks();
+                updateAnalytics();
+                showToast('ลบรายการงานเรียบร้อย');
+            }
+        }
+
+        function openEditModal(id) {
+            const task = tasks.find(t => t.id === id);
+            if (!task) return;
+
+            document.getElementById('edit-task-id').value = task.id;
+            document.getElementById('edit-task-title').value = task.title;
+            document.getElementById('edit-task-priority').value = task.priority;
+            document.getElementById('edit-task-due-time').value = task.due_time || '';
+
+            toggleModal('edit-task-modal');
+        }
+
+        async function saveEditTask() {
+            const id = document.getElementById('edit-task-id').value;
+            const updatedTitle = document.getElementById('edit-task-title').value.trim();
+            const updatedPriority = document.getElementById('edit-task-priority').value;
+            const updatedDueTime = document.getElementById('edit-task-due-time').value || null;
+
+            if (supabaseClient) {
+                const { error } = await supabaseClient
+                    .from('todos')
+                    .update({
+                        title: updatedTitle,
+                        priority: updatedPriority,
+                        due_time: updatedDueTime
+                    })
+                    .eq('id', id);
+
+                if (error) {
+                    showToast('บันทึกการแก้ไขไม่สำเร็จ: ' + error.message, 'error');
+                    return;
+                }
+            } else {
+                const task = tasks.find(t => t.id === id);
+                if (task) {
+                    task.title = updatedTitle;
+                    task.priority = updatedPriority;
+                    task.due_time = updatedDueTime;
+                    saveFallbackToLocal();
+                    renderTasks();
+                    updateAnalytics();
+                }
+            }
+
+            toggleModal('edit-task-modal');
+            showToast('แก้ไขงานเรียบร้อย');
+        }
+
+        // --- Telegram Simulation Handler ---
+        async function handleSimulateTelegram(e) {
+            e.preventDefault();
+            const input = document.getElementById('sim-input-text');
+            let rawText = input.value.trim();
+
+            if (!rawText) return;
+
+            // Command Parser Logic
+            let title = rawText.replace(/^\/add\s*/i, '');
+            let priority = 'medium';
+            let dueTime = null;
+            let category = 'Telegram';
+
+            if (title.includes('#high')) {
+                priority = 'high';
+                title = title.replace('#high', '');
+            } else if (title.includes('#low')) {
+                priority = 'low';
+                title = title.replace('#low', '');
+            }
+
+            // Extract Time (@HH:MM)
+            const timeMatch = title.match(/@([0-1]?[0-9]|2[0-3]):[0-5][0-9]/);
+            if (timeMatch) {
+                dueTime = timeMatch[0].replace('@', '');
+                title = title.replace(timeMatch[0], '');
+            }
+
+            // Extract Hashtag Category (#Work)
+            const catMatch = title.match(/#[^\s#]+/);
+            if (catMatch) {
+                category = catMatch[0].replace('#', '');
+                title = title.replace(catMatch[0], '');
+            }
+
+            title = title.trim() || 'งานรับจาก Telegram';
+
+            const simTask = {
+                title: title,
+                priority: priority,
+                category: category,
+                due_time: dueTime,
+                completed: false,
+                source: 'telegram'
+            };
+
+            if (supabaseClient) {
+                const { error } = await supabaseClient.from('todos').insert([simTask]);
+                if (error) {
+                    showToast('ยิงข้อมูลลง Supabase ล้มเหลว: ' + error.message, 'error');
+                    return;
+                }
+                showToast('ยิงข้อความจำลองจาก Telegram เข้า Supabase สำเร็จ!');
+            } else {
+                simTask.id = Date.now().toString();
+                simTask.created_at = new Date().toISOString();
+                tasks.unshift(simTask);
+                saveFallbackToLocal();
+                renderTasks();
+                updateAnalytics();
+                showToast('จำลองข้อความ Telegram (Local Mode)');
+            }
+
+            input.value = '';
+        }
+
+        function fillSim(txt) {
+            document.getElementById('sim-input-text').value = txt;
+        }
+
+        // --- Render UI Functions ---
+        function renderTasks() {
+            const container = document.getElementById('tasks-container');
+            const sortBy = document.getElementById('sort-select').value;
+
+            // Filter Filter
+            let filtered = tasks.filter(t => {
+                if (currentFilter === 'pending') return !t.completed;
+                if (currentFilter === 'completed') return t.completed;
+                if (currentFilter === 'telegram') return t.source === 'telegram';
+                return true;
+            });
+
+            // Sorting
+            filtered.sort((a, b) => {
+                if (sortBy === 'priority') {
+                    const weight = { high: 3, medium: 2, low: 1 };
+                    return weight[b.priority] - weight[a.priority];
+                }
+                if (sortBy === 'due_time') {
+                    return (a.due_time || '23:59').localeCompare(b.due_time || '23:59');
+                }
+                if (sortBy === 'created_at') {
+                    return new Date(b.created_at) - new Date(a.created_at);
+                }
+                return 0;
+            });
+
+            // Badge Counts
+            document.getElementById('count-all').textContent = tasks.length;
+            document.getElementById('count-pending').textContent = tasks.filter(t => !t.completed).length;
+            document.getElementById('count-completed').textContent = tasks.filter(t => t.completed).length;
+
+            if (filtered.length === 0) {
+                container.innerHTML = `
+                    <div class="glass-panel rounded-2xl p-8 text-center space-y-2">
+                        <i class="fa-solid fa-list-check text-slate-600 text-3xl mb-1"></i>
+                        <p class="text-sm font-medium text-slate-400">ไม่พบรายการงานในหมวดหมู่นี้</p>
+                        <p class="text-xs text-slate-500">พิมพ์เพิ่มงานใหม่ด้านบน หรือส่งผ่าน Telegram Simulator</p>
+                    </div>
+                `;
+                return;
+            }
+
+            container.innerHTML = filtered.map(t => {
+                const priorityBadge = {
+                    high: '<span class="bg-rose-500/10 text-rose-400 border border-rose-500/20 text-[10px] px-2 py-0.5 rounded-md font-medium">🔴 High</span>',
+                    medium: '<span class="bg-amber-500/10 text-amber-400 border border-amber-500/20 text-[10px] px-2 py-0.5 rounded-md font-medium">🟡 Medium</span>',
+                    low: '<span class="bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-[10px] px-2 py-0.5 rounded-md font-medium">🟢 Low</span>'
+                }[t.priority || 'medium'];
+
+                const sourceBadge = t.source === 'telegram'
+                    ? '<span class="bg-telegram/10 text-telegram border border-telegram/20 text-[10px] px-2 py-0.5 rounded-md font-medium flex items-center gap-1"><i class="fa-brands fa-telegram text-[10px]"></i> Telegram</span>'
+                    : '<span class="bg-slate-800 text-slate-400 border border-slate-700 text-[10px] px-2 py-0.5 rounded-md">Manual</span>';
+
+                return `
+                    <div class="glass-panel rounded-2xl p-3.5 transition flex items-start justify-between gap-3 hover:border-slate-700 group ${t.completed ? 'opacity-50 bg-slate-900/30' : ''}">
+                        
+                        <div class="flex items-start gap-3 flex-1 min-w-0">
+                            <!-- Checkbox -->
+                            <button onclick="toggleTaskComplete('${t.id}')" class="mt-0.5 flex-shrink-0 w-5 h-5 rounded-lg border ${t.completed ? 'bg-emerald-500 border-emerald-500 text-slate-950' : 'border-slate-700 hover:border-rose-500 text-transparent'} flex items-center justify-center transition cursor-pointer">
+                                <i class="fa-solid fa-check text-xs font-bold"></i>
+                            </button>
+
+                            <!-- Task Text & Metadata -->
+                            <div class="space-y-1.5 flex-1 min-w-0">
+                                <p class="text-xs sm:text-sm font-medium ${t.completed ? 'line-through text-slate-400' : 'text-slate-100'} break-words">
+                                    ${escapeHtml(t.title)}
+                                </p>
+                                
+                                <div class="flex items-center gap-2 flex-wrap text-[10px]">
+                                    ${priorityBadge}
+                                    ${sourceBadge}
+                                    
+                                    ${t.due_time ? `
+                                        <span class="text-slate-400 bg-slate-950/80 px-2 py-0.5 rounded-md border border-slate-800 font-mono">
+                                            <i class="fa-regular fa-clock text-rose-400"></i> ${t.due_time} น.
+                                        </span>
+                                    ` : ''}
+
+                                    ${t.category ? `
+                                        <span class="bg-slate-800 text-slate-400 px-2 py-0.5 rounded-md">
+                                            #${escapeHtml(t.category)}
+                                        </span>
+                                    ` : ''}
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Action Buttons -->
+                        <div class="flex items-center gap-1 opacity-80 sm:opacity-0 group-hover:opacity-100 transition">
+                            <button onclick="openEditModal('${t.id}')" class="p-1.5 text-slate-400 hover:text-slate-100 hover:bg-slate-800 rounded-lg text-xs">
+                                <i class="fa-solid fa-pen"></i>
+                            </button>
+                            <button onclick="deleteTask('${t.id}')" class="p-1.5 text-slate-400 hover:text-rose-400 hover:bg-slate-800 rounded-lg text-xs">
+                                <i class="fa-solid fa-trash-can"></i>
+                            </button>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function setFilter(filter) {
+            currentFilter = filter;
+            document.querySelectorAll('.filter-btn').forEach(btn => {
+                btn.classList.remove('bg-rose-600', 'text-white');
+                btn.classList.add('text-slate-400');
+            });
+
+            const activeBtn = document.getElementById(`filter-${filter}`);
+            if (activeBtn) {
+                activeBtn.classList.add('bg-rose-600', 'text-white');
+                activeBtn.classList.remove('text-slate-400');
+            }
+            renderTasks();
+        }
+
+        // --- Analytics Update ---
+        function updateAnalytics() {
+            const total = tasks.length;
+            const completed = tasks.filter(t => t.completed).length;
+            const percentage = total > 0 ? Math.round((completed / total) * 100) : 0;
+
+            document.getElementById('header-progress-bar').style.width = `${percentage}%`;
+            document.getElementById('header-progress-text').textContent = `${percentage}%`;
+
+            document.getElementById('stat-total').textContent = total;
+            document.getElementById('stat-completed').textContent = completed;
+
+            // Priority Breakdown
+            const highCount = tasks.filter(t => t.priority === 'high').length;
+            const mediumCount = tasks.filter(t => t.priority === 'medium').length;
+            const lowCount = tasks.filter(t => t.priority === 'low').length;
+
+            document.getElementById('stat-high-count').textContent = highCount;
+            document.getElementById('stat-medium-count').textContent = mediumCount;
+            document.getElementById('stat-low-count').textContent = lowCount;
+
+            document.getElementById('stat-high-bar').style.width = `${total > 0 ? (highCount / total) * 100 : 0}%`;
+            document.getElementById('stat-medium-bar').style.width = `${total > 0 ? (mediumCount / total) * 100 : 0}%`;
+            document.getElementById('stat-low-bar').style.width = `${total > 0 ? (lowCount / total) * 100 : 0}%`;
+        }
+
+        // --- Config Actions ---
+        function saveSupabaseConfig() {
+            const url = document.getElementById('cfg-supabase-url').value.trim();
+            const key = document.getElementById('cfg-supabase-key').value.trim();
+
+            if (!url || !key) {
+                showToast('กรุณากรอกทั้ง Supabase URL และ Key', 'error');
+                return;
+            }
+
+            localStorage.setItem('supabase_url', url);
+            localStorage.setItem('supabase_key', key);
+            config.url = url;
+            config.key = key;
+
+            initSupabase();
+            toggleModal('settings-modal');
+            showToast('บันทึกการตั้งค่า Supabase เรียบร้อย');
+        }
+
+        async function testSupabaseConnection() {
+            const url = document.getElementById('cfg-supabase-url').value.trim();
+            const key = document.getElementById('cfg-supabase-key').value.trim();
+
+            if (!url || !key) {
+                alert('กรุณากรอก URL และ Key ก่อนทดสอบ');
+                return;
+            }
+
+            try {
+                const tempClient = window.supabase.createClient(url, key);
+                const { error } = await tempClient.from('todos').select('id').limit(1);
+                
+                if (error) {
+                    alert('การเชื่อมต่อล้มเหลว: ' + error.message);
+                } else {
+                    alert('✅ เชื่อมต่อ Supabase สำเร็จ!');
+                }
+            } catch (err) {
+                alert('ข้อผิดพลาดการเชื่อมต่อ: ' + err.message);
+            }
+        }
+
+        function copySqlScript() {
+            const sqlText = document.getElementById('sql-script-code').textContent;
+            navigator.clipboard.writeText(sqlText).then(() => {
+                showToast('คัดลอก SQL Script ลง คลิปบอร์ดแล้ว');
+            }).catch(() => {
+                document.execCommand('copy');
+                showToast('คัดลอกเรียบร้อยแล้ว');
+            });
+        }
+
+        // --- Helpers ---
+        function toggleModal(modalId) {
+            document.getElementById(modalId).classList.toggle('hidden');
+        }
+
+        function showToast(message, type = 'success') {
+            const container = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+            
+            const colorClass = type === 'error' ? 'border-rose-500 text-rose-200' : 'border-emerald-500 text-emerald-200';
+            const icon = type === 'error' ? 'fa-triangle-exclamation text-rose-400' : 'fa-circle-check text-emerald-400';
+
+            toast.className = `bg-slate-900 border ${colorClass} px-4 py-2.5 rounded-xl shadow-2xl text-xs flex items-center gap-2 pointer-events-auto animate-bounce`;
+            toast.innerHTML = `<i class="fa-solid ${icon}"></i> ${escapeHtml(message)}`;
+
+            container.appendChild(toast);
+            setTimeout(() => toast.remove(), 3500);
+        }
+
+        function escapeHtml(str) {
+            return (str || '').replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
+        }
+    </script>
+</body>
+</html>
