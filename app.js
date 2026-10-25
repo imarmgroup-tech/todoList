@@ -61,11 +61,11 @@ function updateConnectionStatus(isConnected, message) {
 
     if (dot && text) {
         if (isConnected) {
-            dot.className = 'w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse';
+            dot.className = 'w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse inline-block';
             text.textContent = message;
             text.className = 'text-emerald-400 text-xs font-medium';
         } else {
-            dot.className = 'w-2.5 h-2.5 rounded-full bg-amber-500';
+            dot.className = 'w-2.5 h-2.5 rounded-full bg-amber-500 inline-block';
             text.textContent = message;
             text.className = 'text-slate-400 text-xs';
         }
@@ -239,7 +239,7 @@ async function saveEditTask() {
     if (!title) return;
 
     if (supabaseClient) {
-        const { error } = await supabaseClient.from('todos').update({ title, priority, due_date, due_time }).eq('id', id);
+        const { error } = await supabaseClient.from('todos').update({ title, priority, due_date: due_date || null, due_time: due_time || null }).eq('id', id);
         if (error) {
             showToast('แก้ไขข้อมูลไม่สำเร็จ', 'error');
         } else {
@@ -252,8 +252,8 @@ async function saveEditTask() {
         if (task) {
             task.title = title;
             task.priority = priority;
-            task.due_date = due_date;
-            task.due_time = due_time;
+            task.due_date = due_date || null;
+            task.due_time = due_time || null;
             saveLocalFallbackTasks();
             renderTasks();
             updateAnalytics();
