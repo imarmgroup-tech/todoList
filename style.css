@@ -15,13 +15,14 @@ body {
     background-attachment: fixed;
 }
 
-/* Glassmorphism Panel Effect with Smooth Border */
+/* Glassmorphism Panel Effect */
 .glass-panel {
     background: rgba(15, 23, 42, 0.7);
     backdrop-filter: blur(16px);
     -webkit-backdrop-filter: blur(16px);
     border: 1px solid rgba(255, 255, 255, 0.08);
     box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+    animation: fadeIn 0.3s ease-out forwards;
 }
 
 .glass-panel:hover {
@@ -29,14 +30,14 @@ body {
 }
 
 /* Custom Inputs & Selects */
-input[type="text"], select {
+input[type="text"], input[type="date"], input[type="time"], select {
     background-color: rgba(2, 6, 23, 0.6) !important;
     border: 1px solid rgba(255, 255, 255, 0.1) !important;
     color: #f8fafc !important;
     transition: all 0.3s ease;
 }
 
-input[type="text"]:focus, select:focus {
+input[type="text"]:focus, input[type="date"]:focus, input[type="time"]:focus, select:focus {
     border-color: #e11d48 !important;
     box-shadow: 0 0 0 2px rgba(225, 29, 72, 0.2);
     outline: none;
@@ -61,25 +62,7 @@ input[type="text"]:focus, select:focus {
     background: #334155;
 }
 
-/* Telegram & Brand Utilities */
-.bg-telegram {
-    background-color: #229ED9;
-}
-
-.text-telegram {
-    color: #229ED9;
-}
-
-.border-telegram {
-    border-color: #229ED9;
-}
-
-/* Smooth Animations */
 @keyframes fadeIn {
     from { opacity: 0; transform: translateY(6px); }
     to { opacity: 1; transform: translateY(0); }
-}
-
-.glass-panel {
-    animation: fadeIn 0.3s ease-out forwards;
 }
