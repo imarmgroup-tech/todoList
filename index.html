@@ -99,16 +99,18 @@
             <!-- Quick Add Task Form -->
             <div class="glass-panel p-4 rounded-2xl shadow-xl border-l-4 border-l-rose-500">
                 <form id="add-task-form" onsubmit="handleAddTask(event)" class="space-y-3">
-                    <div class="flex flex-col sm:flex-row gap-2.5">
-                        <div class="relative flex-1">
-                            <i class="fa-solid fa-pen-to-square absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
-                            <input type="text" id="task-title" required placeholder="ระบุงานที่จะต้องทำ... (เช่น ส่งสรุปงบประมาณไตรมาส 3)" 
-                                   class="w-full bg-slate-950 text-sm text-slate-100 placeholder-slate-500 pl-9 pr-4 py-2.5 rounded-xl border border-slate-800 focus:outline-none focus:border-rose-500 transition">
-                        </div>
-                        <button type="submit" id="btn-add-submit" class="bg-gradient-to-r from-rose-600 to-rose-500 hover:from-rose-500 hover:to-rose-400 text-white px-5 py-2.5 rounded-xl font-medium text-sm flex items-center justify-center gap-2 transition-all shadow-lg shadow-rose-600/20 active:scale-95">
-                            <i class="fa-solid fa-plus text-xs"></i>
-                            <span>เพิ่มงาน</span>
-                        </button>
+                    <div class="flex gap-2 flex-wrap sm:flex-nowrap">
+    <input type="text" id="task-title" placeholder="ระบุงาน... (#high @14:30 @2026-10-31 #Work)" 
+        class="flex-1 bg-slate-900 border border-slate-800 rounded-xl px-4 py-2.5 text-xs text-slate-100 focus:outline-none" required>
+    
+    <!-- เพิ่มช่องเลือกวันที่ -->
+    <input type="date" id="task-due-date" 
+        class="bg-slate-900 border border-slate-800 rounded-xl px-3 py-2.5 text-xs text-slate-300 focus:outline-none">
+
+    <button type="submit" class="bg-rose-600 hover:bg-rose-500 text-white px-5 py-2.5 rounded-xl text-xs font-medium transition flex items-center gap-2">
+        <i class="fa-solid fa-plus"></i> เพิ่มงาน
+    </button>
+</div>
                     </div>
 
                     <!-- Metadata inputs -->
