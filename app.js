@@ -438,3 +438,16 @@ function showToast(message, type = 'success') {
 function escapeHtml(str) {
     return String(str || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;');
 }
+// อัปเดตฟังก์ชันนี้ใน app.js ของคุณ
+function jumpToAddFormWithDate() {
+    // ปิด Modal รายการงานประจำวันก่อน
+    toggleModal('day-tasks-modal');
+    
+    const dueDateInput = document.getElementById('task-due-date');
+    if (dueDateInput && selectedCalendarDateStr) {
+        dueDateInput.value = selectedCalendarDateStr;
+        switchView('list'); // สลับกลับมาหน้าแสดงผลรายการปกติ
+        showToast(`เลือกวันที่ ${selectedCalendarDateStr} แล้ว กรอกรายละเอียดด้านบนได้เลย`, 'success');
+        document.getElementById('task-title').focus();
+    }
+}
