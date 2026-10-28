@@ -34,7 +34,7 @@
             </div>
             
             <div class="flex gap-2 pt-2">
-                <button type="submit" onclick="setAuthMode('login')" class="flex-1 bg-red-600 hover:bg-red-700 text-white py-2.5 rounded-xl text-xs font-semibold transition cursor-pointer shadow-lg shadow-red-900/30">
+                <button type="submit" onclick="setAuthMode('login')" class="flex-1 bg-red-600 hover:bg-red-700 text-white py-2.5 rounded-xl text-xs font-semibold transition cursor-pointer shadow-lg shadow-red-950/50">
                     เข้าสู่ระบบ
                 </button>
                 <button type="submit" onclick="setAuthMode('signup')" class="flex-1 bg-neutral-900 border border-neutral-800 hover:bg-neutral-800 text-white py-2.5 rounded-xl text-xs font-semibold transition cursor-pointer">
@@ -134,10 +134,11 @@
         <!-- View Switcher, Sort & Extra Actions -->
         <div class="flex flex-wrap items-center justify-between gap-3">
             <div class="flex items-center gap-2">
-                <button onclick="switchView('list')" id="view-btn-list" class="bg-red-600 text-white px-3 py-1.5 rounded-xl text-xs font-medium transition cursor-pointer">
+                <!-- ตั้งค่าให้ปุ่มปฏิทินเป็นค่าเริ่มต้น (Selected) -->
+                <button onclick="switchView('list')" id="view-btn-list" class="bg-neutral-900 border border-neutral-800 text-neutral-300 hover:text-white px-3 py-1.5 rounded-xl text-xs font-medium transition cursor-pointer">
                     <i class="fa-solid fa-list-check"></i> รายการ
                 </button>
-                <button onclick="switchView('calendar')" id="view-btn-calendar" class="bg-neutral-900 border border-neutral-800 text-neutral-300 hover:text-white px-3 py-1.5 rounded-xl text-xs font-medium transition cursor-pointer">
+                <button onclick="switchView('calendar')" id="view-btn-calendar" class="bg-red-600 text-white px-3 py-1.5 rounded-xl text-xs font-medium transition cursor-pointer">
                     <i class="fa-regular fa-calendar-days"></i> ปฏิทิน
                 </button>
                 <span class="text-xs text-neutral-400 ml-2">เรียงลำดับ:</span>
@@ -157,11 +158,11 @@
             </div>
         </div>
 
-        <!-- Tasks List Container -->
-        <div id="tasks-container" class="space-y-3"></div>
+        <!-- Tasks List Container (ซ่อนไว้เริ่มต้น) -->
+        <div id="tasks-container" class="hidden space-y-3"></div>
 
-        <!-- Calendar View Container -->
-        <div id="calendar-container" class="hidden glass-panel rounded-2xl p-5 space-y-4 border border-neutral-800">
+        <!-- Calendar View Container (แสดงเป็นหน้าแรก) -->
+        <div id="calendar-container" class="glass-panel rounded-2xl p-5 space-y-4 border border-neutral-800">
             <div class="flex justify-between items-center">
                 <button onclick="changeMonth(-1)" class="bg-neutral-900 border border-neutral-800 text-neutral-300 hover:text-white px-3 py-1.5 rounded-xl text-xs transition cursor-pointer">
                     <i class="fa-solid fa-chevron-left"></i> เดือนก่อนหน้า
