@@ -547,3 +547,56 @@ function showToast(message, type = 'success') {
 function escapeHtml(str) {
     return String(str || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;');
 }
+
+let selectedCalendarDateStr = ''; // เก็บวันที่กำลังคลิกดูอยู่
+
+// เมื่อคลิกที่วันในปฏิทิน จะเปิด Modal แสดงรายการงานของวันนั้น
+function openDateModal(dateStr) {
+    selectedCalendarDateStr = dateStr;
+    const modalTitle = document.getElementById('modal-date-title');
+    const listContainer = document.getElementById('modal-day-tasks-list');
+    
+    if (modalTitle) {
+        // แปลง ค.ศ. เป็น พ.ศ. เพื่อความสวยงาม
+        const [y, m, d] = dateStr.split('-');
+        modalTitle.textContent = `${d}/${m}/${parseInt(y) + 543}`;
+    }
+
+    // กรองงานเฉพาะวันที่เลือก
+    const dayTasks = tasks.filter(t => t.due_date === dateStr);
+
+    if (listContainer) {
+        if (dayTasks.length === 0) {
+            listContainer.innerHTML = `<p class="text-xs text-slate-400 text-center py-4">ไม่มีรายการงานในวันนี้</p>`;
+        } else {
+            listContainer.innerHTML = dayTasks.map(t => `
+                <div class="bg-slate-900/80 border border-slate-800 p-3 rounded-xl flex items-center justify-between gap-2">
+                    <div class="flex items-center gap-2.5 min-w-0">
+                        <input type="checkbox" ${t.completed ? 'checked' : ''} onchange="toggleTaskComplete('${t.id}'); openDateModal('${dateStr}');" class="w-4 h-4 rounded border-slate-700 bg-slate-900 text-rose-600 cursor-pointer accent-rose-500">
+                        <div class="min-w-0">
+                            <p class="text-xs font-semibold text-slate-200 truncate ${t.completed ? 'line-through text-slate-500' : ''}">${escapeHtml(t.title)}</p>
+                            <p class="text-[10px] text-slate-400">หมวดหมู่: ${escapeHtml(t.category || 'Work')} ${t.due_time ? `| เวลา: ${t.due_time}` : ''}</p>
+                        </div>
+                    </div>
+                    <button onclick="deleteTask('${t.id}'); openDateModal('${dateStr}');" class="text-slate-500 hover:text-rose-400 p-1 cursor-pointer" title="ลบงาน">
+                        <i class="fa-solid fa-trash text-xs"></i>
+                    </button>
+                </div>
+            `).join('');
+        }
+    }
+
+    toggleModal('day-tasks-modal');
+}
+
+// ปุ่มลัดสำหรับพาไปหน้าเพิ่มงานพร้อมล็อควันที่นั้นไว้
+function jumpToAddFormWithDate() {
+    toggleModal('day-tasks-modal');
+    const dueDateInput = document.getElementById('task-due-date');
+    if (dueDateInput && selectedCalendarDateStr) {
+        dueDateInput.value = selectedCalendarDateStr;
+        switchView('list');
+        showToast(`เลือกวันที่ ${selectedCalendarDateStr} แล้ว กรอกรายละเอียดด้านบนได้เลย`, 'success');
+        document.getElementById('task-title').focus();
+    }
+}
