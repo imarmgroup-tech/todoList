@@ -3,7 +3,7 @@ let supabaseClient = null;
 let currentUser = null;
 let authMode = 'login'; // 'login' หรือ 'signup'
 let tasks = [];
-let currentFilter = 'all';
+let currentFilter = 'all'; // ตั้งค่าเริ่มต้นเป็นแสดงทั้งหมด
 let realtimeSubscription = null;
 
 // --- Window Onload ---
@@ -22,7 +22,7 @@ function initDateDisplay() {
     }
 }
 
-// --- Supabase Initialization (ใช้องค์ประกอบจาก config.js) ---
+// --- Supabase Initialization ---
 function initSupabase() {
     try {
         if (typeof SUPABASE_URL === 'undefined' || typeof SUPABASE_ANON_KEY === 'undefined') {
@@ -103,6 +103,8 @@ function showAppUI() {
     if (appBox) appBox.classList.remove('hidden');
     if (userEmailEl && currentUser) userEmailEl.textContent = currentUser.email;
     
+    // ตั้งค่าตัวกรองเริ่มต้นเป็น 'all' เสมอเมื่อเข้าสู่ระบบ
+    setFilter('all');
     fetchTasksFromSupabase();
     subscribeRealtime();
 }
@@ -271,11 +273,25 @@ function addToCalendar(id) {
 // --- Filters & Sorting ---
 function setFilter(filterType) {
     currentFilter = filterType;
-    document.querySelectorAll('.filter-btn').forEach(btn => {
-        btn.className = 'filter-btn bg-slate-900 border border-slate-800 text-slate-400 hover:text-slate-200 px-3 py-1.5 rounded-xl text-xs font-medium transition cursor-pointer';
+    
+    // รีเซตสไตล์ปุ่มตัวกรองหลัก (ทั้งหมด, ค้าง, เสร็จ)
+    ['all', 'pending', 'completed'].forEach(type => {
+        const btn = document.getElementById(`filter-${type}`);
+        if (btn) {
+            btn.className = type === filterType 
+                ? 'filter-btn bg-rose-600 text-white px-2.5 py-1 rounded-lg text-xs font-medium transition cursor-pointer' 
+                : 'filter-btn text-slate-400 hover:text-slate-200 px-2.5 py-1 rounded-lg text-xs font-medium transition cursor-pointer';
+        }
     });
-    const activeBtn = document.getElementById(`filter-${filterType}`);
-    if (activeBtn) activeBtn.className = 'filter-btn px-3 py-1.5 rounded-xl text-xs font-medium transition bg-rose-600 text-white cursor-pointer';
+
+    // รีเซตสไตล์ปุ่มตัวกรองเสริม (งานประจำวัน)
+    const routineBtn = document.getElementById('filter-routine');
+    if (routineBtn) {
+        routineBtn.className = filterType === 'routine' 
+            ? 'filter-btn bg-rose-600 text-white px-3 py-1.5 rounded-xl text-xs font-medium transition cursor-pointer' 
+            : 'filter-btn bg-slate-900 border border-slate-800 text-slate-300 hover:text-white px-3 py-1.5 rounded-xl text-xs font-medium transition cursor-pointer';
+    }
+
     renderTasks();
 }
 
@@ -288,7 +304,7 @@ function renderTasks() {
         if (currentFilter === 'completed') return t.completed;
         if (currentFilter === 'routine') return t.is_routine;
         if (currentFilter === 'telegram') return t.source === 'telegram';
-        return true;
+        return true; // 'all'
     });
 
     filtered.sort((a, b) => {
@@ -302,9 +318,13 @@ function renderTasks() {
         }
     });
 
-    document.getElementById('count-all').textContent = tasks.length;
-    document.getElementById('count-pending').textContent = tasks.filter(t => !t.completed).length;
-    document.getElementById('count-completed').textContent = tasks.filter(t => t.completed).length;
+    const countAll = document.getElementById('count-all');
+    const countPending = document.getElementById('count-pending');
+    const countCompleted = document.getElementById('count-completed');
+
+    if (countAll) countAll.textContent = tasks.length;
+    if (countPending) countPending.textContent = tasks.filter(t => !t.completed).length;
+    if (countCompleted) countCompleted.textContent = tasks.filter(t => t.completed).length;
 
     if (!container) return;
     if (filtered.length === 0) {
