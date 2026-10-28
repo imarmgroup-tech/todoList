@@ -3,369 +3,227 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Telegram Daily Task Manager</title>
-    <!-- Tailwind CSS -->
+    <title>Web Todo App + Telegram Bot & Auth</title>
+    <!-- Tailwind CSS & FontAwesome -->
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- Font Awesome Icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <!-- Google Fonts -->
-    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700&family=Sarabun:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <!-- Supabase JS Client -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <!-- Custom CSS -->
     <link rel="stylesheet" href="style.css">
 </head>
-<body class="p-4 md:p-8">
+<body class="p-3 sm:p-6">
 
-    <!-- Toast Notifications Container -->
-    <div id="toast-container" class="fixed top-5 right-5 z-50 flex flex-col gap-2 pointer-events-none"></div>
-
-    <div class="max-w-6xl mx-auto space-y-6">
-        
-        <!-- Header & Nav -->
-        <header class="glass-panel rounded-3xl p-6 flex flex-col md:flex-row items-center justify-between gap-4">
-            <div class="flex items-center gap-4">
-                <div class="w-12 h-12 rounded-2xl bg-gradient-to-tr from-rose-600 to-sky-500 flex items-center justify-center text-white text-xl shadow-lg shadow-rose-500/20">
-                    <i class="fa-solid fa-list-check"></i>
-                </div>
-                <div>
-                    <h1 class="text-xl font-bold bg-gradient-to-r from-white via-slate-200 to-slate-400 bg-clip-text text-transparent">
-                        Telegram Daily Task Manager
-                    </h1>
-                    <p class="text-xs text-slate-400 flex items-center gap-2 mt-0.5">
-                        <span id="current-date-str">กำลังโหลดวันที่...</span>
-                        <span class="inline-block w-1 h-1 rounded-full bg-slate-600"></span>
-                        <span id="db-status-dot" class="w-2.5 h-2.5 rounded-full bg-amber-500 inline-block"></span>
-                        <span id="db-status-text" class="text-xs">กำลังตรวจสอบการเชื่อมต่อ...</span>
-                    </p>
-                </div>
-            </div>
-
-            <!-- Header Stats & Action Buttons -->
-            <div class="flex items-center gap-3 w-full md:w-auto justify-between md:justify-end">
-                <div class="glass-panel px-4 py-2 rounded-2xl flex items-center gap-3">
-                    <div class="text-right">
-                        <p class="text-[10px] text-slate-400 uppercase tracking-wider">ความคืบหน้าวันนี้</p>
-                        <p id="header-progress-text" class="text-sm font-bold text-rose-400">0%</p>
-                    </div>
-                    <div class="w-12 bg-slate-800 rounded-full h-2 overflow-hidden">
-                        <div id="header-progress-bar" class="bg-gradient-to-r from-rose-500 to-sky-400 h-full w-0 transition-all duration-500"></div>
-                    </div>
-                </div>
-
-                <button onclick="toggleModal('settings-modal')" class="p-3 glass-panel rounded-2xl hover:text-rose-400 transition" title="ตั้งค่า Supabase">
-                    <i class="fa-solid fa-gear text-sm"></i>
-                </button>
-            </div>
-        </header>
-
-        <!-- Main Layout: Grid -->
-        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-
-            <!-- Left Side: Task Form & Simulator -->
-            <div class="space-y-6">
-
-                <!-- Add Task Card -->
-                <div class="glass-panel rounded-3xl p-6 space-y-4">
-                    <div class="flex items-center justify-between">
-                        <h2 class="text-sm font-semibold text-slate-200 flex items-center gap-2">
-                            <i class="fa-solid fa-plus text-rose-500"></i> เพิ่มงานใหม่ (Manual)
-                        </h2>
-                    </div>
-
-                    <form onsubmit="handleAddTask(event)" class="space-y-3">
-                        <div>
-                            <label class="block text-[11px] font-medium text-slate-400 mb-1">ชื่อภารกิจ / งาน</label>
-                            <input type="text" id="task-title" placeholder="เช่น สรุปรายงานการประชุม..." required
-                                   class="w-full px-3.5 py-2.5 rounded-xl text-xs placeholder-slate-500">
-                        </div>
-
-                        <div class="grid grid-cols-2 gap-3">
-                            <div>
-                                <label class="block text-[11px] font-medium text-slate-400 mb-1">ความสำคัญ</label>
-                                <select id="task-priority" class="w-full px-3.5 py-2.5 rounded-xl text-xs">
-                                    <option value="low">Low (ต่ำ)</option>
-                                    <option value="medium" selected>Medium (ปานกลาง)</option>
-                                    <option value="high">High (ด่วนมาก)</option>
-                                </select>
-                            </div>
-                            <div>
-                                <label class="block text-[11px] font-medium text-slate-400 mb-1">หมวดหมู่</label>
-                                <input type="text" id="task-category" placeholder="Work, Personal..." value="Work"
-                                       class="w-full px-3.5 py-2.5 rounded-xl text-xs">
-                            </div>
-                        </div>
-
-                        <div class="grid grid-cols-2 gap-3">
-                            <div>
-                                <label class="block text-[11px] font-medium text-slate-400 mb-1">วันที่ส่งงาน</label>
-                                <input type="date" id="task-due-date" class="w-full px-3 py-2 rounded-xl text-xs">
-                            </div>
-                            <div>
-                                <label class="block text-[11px] font-medium text-slate-400 mb-1">เวลาส่งงาน</label>
-                                <input type="time" id="task-due-time" class="w-full px-3 py-2 rounded-xl text-xs">
-                            </div>
-                        </div>
-
-                        <button type="submit" 
-                                class="w-full py-2.5 bg-gradient-to-r from-rose-600 to-rose-500 hover:from-rose-500 hover:to-rose-400 text-white font-medium text-xs rounded-xl shadow-lg shadow-rose-600/20 transition duration-200 flex items-center justify-center gap-2">
-                            <i class="fa-solid fa-plus"></i> บันทึกภารกิจ
-                        </button>
-                    </form>
-                </div>
-
-                <!-- Telegram Simulator Panel -->
-                <div class="glass-panel rounded-3xl p-6 space-y-4">
-                    <div class="flex items-center justify-between">
-                        <h2 class="text-sm font-semibold text-slate-200 flex items-center gap-2">
-                            <i class="fa-brands fa-telegram text-sky-400"></i> จำลองคำสั่ง Telegram Bot
-                        </h2>
-                        <span class="text-[10px] bg-sky-500/10 text-sky-400 px-2 py-0.5 rounded-full border border-sky-500/20">Simulator</span>
-                    </div>
-
-                    <p class="text-xs text-slate-400 leading-relaxed">
-                        ลองพิมพ์คำสั่งเสมือนส่งข้อความหา Telegram Bot เพื่อทดสอบระบบ Auto-parsing
-                    </p>
-
-                    <form onsubmit="handleSimulateTelegram(event)" class="space-y-3">
-                        <div class="relative">
-                            <input type="text" id="sim-input-text" placeholder="/add ซื้อของเข้าบ้าน #high @18:00" required
-                                   class="w-full px-3.5 py-2.5 pr-10 rounded-xl text-xs placeholder-slate-500">
-                            <button type="submit" class="absolute right-2 top-2 text-sky-400 hover:text-sky-300 p-1">
-                                <i class="fa-solid fa-paper-plane text-xs"></i>
-                            </button>
-                        </div>
-                    </form>
-
-                    <div class="space-y-1.5 pt-2 border-t border-slate-800">
-                        <p class="text-[11px] text-slate-400 font-medium">ตัวอย่างคำสั่งทดสอบ (คลิกเพื่อลอง):</p>
-                        <div class="flex flex-wrap gap-1.5">
-                            <button type="button" onclick="fillSim('/add ตรวจโค้ดระบบ #high @2026-10-31 @15:00')"
-                                    class="text-[10px] bg-slate-800/80 hover:bg-slate-700 text-slate-300 px-2.5 py-1 rounded-lg border border-slate-700/50 transition">
-                                /add ตรวจโค้ดระบบ #high @2026-10-31 @15:00
-                            </button>
-                            <button type="button" onclick="fillSim('/add โทรนัดหมอ #Personal #low @10:30')"
-                                    class="text-[10px] bg-slate-800/80 hover:bg-slate-700 text-slate-300 px-2.5 py-1 rounded-lg border border-slate-700/50 transition">
-                                /add โทรนัดหมอ #Personal #low @10:30
-                            </button>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Analytics Breakdown -->
-                <div class="glass-panel rounded-3xl p-6 space-y-4">
-                    <h2 class="text-sm font-semibold text-slate-200 flex items-center gap-2">
-                        <i class="fa-solid fa-chart-pie text-emerald-400"></i> สรุปสถานะงาน (Analytics)
-                    </h2>
-                    
-                    <div class="space-y-3">
-                        <div>
-                            <div class="flex justify-between text-xs mb-1">
-                                <span class="text-slate-400"> High Priority</span>
-                                <span id="stat-high-count" class="text-rose-400 font-medium">0</span>
-                            </div>
-                            <div class="w-full bg-slate-800 rounded-full h-1.5 overflow-hidden">
-                                <div id="stat-high-bar" class="bg-rose-500 h-full w-0 transition-all duration-300"></div>
-                            </div>
-                        </div>
-
-                        <div>
-                            <div class="flex justify-between text-xs mb-1">
-                                <span class="text-slate-400"> Medium Priority</span>
-                                <span id="stat-medium-count" class="text-amber-400 font-medium">0</span>
-                            </div>
-                            <div class="w-full bg-slate-800 rounded-full h-1.5 overflow-hidden">
-                                <div id="stat-medium-bar" class="bg-amber-500 h-full w-0 transition-all duration-300"></div>
-                            </div>
-                        </div>
-
-                        <div>
-                            <div class="flex justify-between text-xs mb-1">
-                                <span class="text-slate-400"> Low Priority</span>
-                                <span id="stat-low-count" class="text-emerald-400 font-medium">0</span>
-                            </div>
-                            <div class="w-full bg-slate-800 rounded-full h-1.5 overflow-hidden">
-                                <div id="stat-low-bar" class="bg-emerald-500 h-full w-0 transition-all duration-300"></div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="pt-3 border-t border-slate-800 grid grid-cols-2 gap-2 text-center">
-                        <div class="bg-slate-900/50 p-2.5 rounded-xl border border-slate-800">
-                            <p class="text-[10px] text-slate-400">งานทั้งหมด</p>
-                            <p id="stat-total" class="text-base font-bold text-slate-200">0</p>
-                        </div>
-                        <div class="bg-slate-900/50 p-2.5 rounded-xl border border-slate-800">
-                            <p class="text-[10px] text-slate-400">เสร็จสิ้นแล้ว</p>
-                            <p id="stat-completed" class="text-base font-bold text-emerald-400">0</p>
-                        </div>
-                    </div>
-                </div>
-
-            </div>
-
-            <!-- Right Side: Task List & Filter -->
-            <div class="lg:col-span-2 space-y-4">
-
-                <!-- Controls & Filters Bar -->
-                <div class="glass-panel rounded-2xl p-4 flex flex-col sm:flex-row items-center justify-between gap-4">
-                    <!-- Filter Tabs -->
-                    <div class="flex items-center gap-1 bg-slate-900/80 p-1 rounded-2xl border border-slate-800 w-full sm:w-auto">
-                        <button onclick="setFilter('all')" id="filter-all"
-                                class="filter-btn px-3 py-1.5 rounded-xl text-xs font-medium transition bg-rose-600 text-white">
-                            ทั้งหมด (<span id="count-all">0</span>)
-                        </button>
-                        <button onclick="setFilter('pending')" id="filter-pending"
-                                class="filter-btn px-3 py-1.5 rounded-xl text-xs font-medium text-slate-400 hover:text-slate-200 hover:bg-slate-800 transition">
-                            ค้างอยู่ (<span id="count-pending">0</span>)
-                        </button>
-                        <button onclick="setFilter('completed')" id="filter-completed"
-                                class="filter-btn px-3 py-1.5 rounded-xl text-xs font-medium text-slate-400 hover:text-slate-200 hover:bg-slate-800 transition">
-                            เสร็จแล้ว (<span id="count-completed">0</span>)
-                        </button>
-                        <button onclick="setFilter('telegram')" id="filter-telegram"
-                                class="filter-btn px-3 py-1.5 rounded-xl text-xs font-medium text-slate-400 hover:text-slate-200 hover:bg-slate-800 transition flex items-center gap-1">
-                            <i class="fa-brands fa-telegram text-sky-400"></i> Bot
-                        </button>
-                    </div>
-
-                    <!-- Sort Dropdown -->
-                    <div class="flex items-center gap-2 w-full sm:w-auto justify-end">
-                        <label class="text-xs text-slate-400">เรียงตาม:</label>
-                        <select id="sort-select" onchange="renderTasks()" class="px-3 py-1.5 rounded-xl text-xs bg-slate-900">
-                            <option value="latest">สร้างล่าสุด</option>
-                            <option value="priority">ความสำคัญ (High-Low)</option>
-                            <option value="due_date">กำหนดส่ง (Due Date)</option>
-                        </select>
-                    </div>
-                </div>
-
-                <!-- Task Cards Stream Container -->
-                <div id="tasks-container" class="space-y-3">
-                    <!-- Dynamic rendering via JavaScript -->
-                </div>
-
-            </div>
-
+    <!-- Auth View (หน้าจอล็อกอิน / สมัครสมาชิก) -->
+    <div id="auth-container" class="max-w-md mx-auto my-12 glass-panel p-6 rounded-2xl space-y-6">
+        <div class="text-center space-y-2">
+            <h2 class="text-xl font-bold flex items-center justify-center gap-2">
+                <i class="fa-solid fa-user-lock text-rose-500"></i> เข้าสู่ระบบ / สมัครสมาชิก
+            </h2>
+            <p class="text-xs text-slate-400">เข้าสู่ระบบเพื่อจัดการงานส่วนตัวและซิงค์ข้อมูลกับ Telegram</p>
         </div>
 
-    </div>
-
-    <!-- Modal: Settings (Supabase & Instructions) -->
-    <div id="settings-modal" class="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
-        <div class="glass-panel w-full max-w-lg rounded-3xl p-6 space-y-5 max-h-[90vh] overflow-y-auto">
-            <div class="flex items-center justify-between border-b border-slate-800 pb-3">
-                <h3 class="text-base font-semibold text-slate-100 flex items-center gap-2">
-                    <i class="fa-solid fa-sliders text-rose-500"></i> ตั้งค่าระบบ & Database
-                </h3>
-                <button onclick="toggleModal('settings-modal')" class="text-slate-400 hover:text-white">
-                    <i class="fa-solid fa-xmark text-lg"></i>
-                </button>
+        <form onsubmit="handleAuth(event)" class="space-y-4">
+            <div>
+                <label class="block text-xs font-medium text-slate-400 mb-1">อีเมล</label>
+                <input type="email" id="auth-email" placeholder="name@example.com" class="w-full rounded-xl px-4 py-2.5 text-xs" required>
             </div>
-
-            <!-- Supabase Config Form -->
-            <div class="space-y-3">
-                <p class="text-xs text-slate-400">กรอกข้อมูล Supabase URL และ Anon Key เพื่อเปิดใช้งาน Real-time Sync</p>
-                <div>
-                    <label class="block text-xs font-medium text-slate-300 mb-1">Supabase Project URL</label>
-                    <input type="text" id="cfg-supabase-url" placeholder="https://xyzcompany.supabase.co"
-                           class="w-full px-3.5 py-2.5 rounded-xl text-xs">
-                </div>
-                <div>
-                    <label class="block text-xs font-medium text-slate-300 mb-1">Supabase Anon Key</label>
-                    <input type="text" id="cfg-supabase-key" placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
-                           class="w-full px-3.5 py-2.5 rounded-xl text-xs">
-                </div>
-                <div class="flex gap-2">
-                    <button onclick="saveSupabaseConfig()" class="flex-1 py-2 bg-rose-600 hover:bg-rose-500 text-white font-medium text-xs rounded-xl transition">
-                        บันทึกการตั้งค่า
-                    </button>
-                    <button onclick="testSupabaseConnection()" class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs rounded-xl border border-slate-700 transition">
-                        ทดสอบเชื่อมต่อ
-                    </button>
-                </div>
+            <div>
+                <label class="block text-xs font-medium text-slate-400 mb-1">รหัสผ่าน</label>
+                <input type="password" id="auth-password" placeholder="••••••••" class="w-full rounded-xl px-4 py-2.5 text-xs" required>
             </div>
-
-            <!-- SQL Script Guidance -->
-            <div class="space-y-2 border-t border-slate-800 pt-4">
-                <h4 class="text-xs font-semibold text-slate-200 flex items-center gap-2">
-                    <i class="fa-solid fa-database text-sky-400"></i> โครงสร้าง ตาราง (SQL Script)
-                </h4>
-                <p class="text-[11px] text-slate-400">รันคำสั่ง SQL นี้ใน Supabase SQL Editor เพื่อสร้างตาราง <code class="text-rose-400 bg-slate-900 px-1 py-0.5 rounded">todos</code></p>
-                <div class="bg-slate-950 p-3 rounded-xl border border-slate-800 relative group">
-                    <button onclick="copySqlScript()" class="absolute right-2 top-2 bg-slate-800 hover:bg-slate-700 text-slate-300 text-[10px] px-2 py-1 rounded transition">
-                        <i class="fa-regular fa-copy"></i> Copy SQL
-                    </button>
-                    <pre id="sql-script-code" class="text-[10px] text-slate-300 font-mono overflow-x-auto">create table public.todos (
-  id uuid default gen_random_uuid() primary key,
-  title text not null,
-  priority text default 'medium',
-  category text default 'Work',
-  due_date date,
-  due_time text,
-  completed boolean default false,
-  source text default 'manual',
-  created_at timestamp with time zone default timezone('utc'::text, now())
-);
-
--- Enable Realtime
-alter publication supabase_realtime add table todos;</pre>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Modal: Edit Task -->
-    <div id="edit-task-modal" class="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
-        <div class="glass-panel w-full max-w-md rounded-3xl p-6 space-y-4">
-            <div class="flex items-center justify-between border-b border-slate-800 pb-3">
-                <h3 class="text-sm font-semibold text-slate-100 flex items-center gap-2">
-                    <i class="fa-solid fa-pen text-rose-500"></i> แก้ไขภารกิจ
-                </h3>
-                <button onclick="toggleModal('edit-task-modal')" class="text-slate-400 hover:text-white">
-                    <i class="fa-solid fa-xmark text-lg"></i>
-                </button>
-            </div>
-
-            <input type="hidden" id="edit-task-id">
             
+            <div class="flex gap-2 pt-2">
+                <button type="submit" onclick="setAuthMode('login')" class="flex-1 bg-rose-600 hover:bg-rose-500 text-white py-2.5 rounded-xl text-xs font-semibold transition cursor-pointer">
+                    เข้าสู่ระบบ
+                </button>
+                <button type="submit" onclick="setAuthMode('signup')" class="flex-1 bg-slate-900 border border-slate-800 hover:bg-slate-800 text-slate-200 py-2.5 rounded-xl text-xs font-semibold transition cursor-pointer">
+                    สมัครสมาชิก
+                </button>
+            </div>
+        </form>
+    </div>
+
+    <!-- Main App View (หน้าจอแอปหลัก - จะแสดงเมื่อล็อกอินแล้ว) -->
+    <div id="app-container" class="hidden max-w-4xl mx-auto space-y-6">
+        <!-- Header -->
+        <div class="glass-panel p-5 rounded-2xl flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+            <div>
+                <h1 class="text-base sm:text-lg font-bold flex items-center gap-2">
+                    <i class="fa-solid fa-list-check text-rose-500"></i> Todo & Telegram Bot + Calendar
+                </h1>
+                <p id="current-date-str" class="text-xs text-slate-400 mt-1"></p>
+            </div>
+            
+            <div class="flex items-center gap-3">
+                <div class="text-right">
+                    <p id="user-email-display" class="text-xs font-semibold text-rose-400"></p>
+                    <span id="db-status-text" class="text-[10px] text-emerald-400 font-medium">Supabase Connected</span>
+                </div>
+                <button onclick="handleLogout()" class="bg-slate-900 border border-slate-800 hover:border-rose-500/50 hover:text-rose-400 px-3 py-1.5 rounded-xl text-xs font-medium text-slate-300 transition flex items-center gap-1.5 cursor-pointer">
+                    <i class="fa-solid fa-right-from-bracket"></i> ออกจากระบบ
+                </button>
+            </div>
+        </div>
+
+        <!-- Progress & Analytics -->
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div class="glass-panel p-4 rounded-2xl space-y-2">
+                <div class="flex justify-between text-xs text-slate-400">
+                    <span>ความคืบหน้ารวม</span>
+                    <span id="header-progress-text" class="font-bold text-rose-400">0%</span>
+                </div>
+                <div class="w-full bg-slate-900 h-2 rounded-full overflow-hidden">
+                    <div id="header-progress-bar" class="bg-gradient-to-r from-rose-600 to-pink-500 h-full w-0 transition-all duration-500"></div>
+                </div>
+            </div>
+            <div class="glass-panel p-4 rounded-2xl flex justify-between items-center">
+                <div>
+                    <p class="text-xs text-slate-400">งานทั้งหมด / เสร็จแล้ว</p>
+                    <h3 class="text-lg font-bold text-slate-100 mt-0.5"><span id="stat-total">0</span> / <span id="stat-completed" class="text-emerald-400">0</span></h3>
+                </div>
+                <div class="w-10 h-10 rounded-xl bg-rose-500/10 border border-rose-500/20 flex items-center justify-center text-rose-400">
+                    <i class="fa-solid fa-chart-pie"></i>
+                </div>
+            </div>
+            <div class="glass-panel p-4 rounded-2xl flex items-center justify-between">
+                <div>
+                    <p class="text-xs text-slate-400">ตัวกรองด่วน</p>
+                    <div class="flex gap-1 mt-1">
+                        <button onclick="setFilter('all')" id="filter-all" class="filter-btn bg-rose-600 text-white px-2.5 py-1 rounded-lg text-xs font-medium transition">ทั้งหมด (<span id="count-all">0</span>)</button>
+                        <button onclick="setFilter('pending')" id="filter-pending" class="filter-btn text-slate-400 hover:text-slate-200 px-2.5 py-1 rounded-lg text-xs font-medium transition">ค้าง (<span id="count-pending">0</span>)</button>
+                        <button onclick="setFilter('completed')" id="filter-completed" class="filter-btn text-slate-400 hover:text-slate-200 px-2.5 py-1 rounded-lg text-xs font-medium transition">เสร็จ (<span id="count-completed">0</span>)</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Add Task Form -->
+        <form onsubmit="handleAddTask(event)" class="glass-panel rounded-2xl p-4 space-y-3">
+            <div class="flex flex-col sm:flex-row gap-2">
+                <input type="text" id="task-title" placeholder="ระบุงานที่จะต้องทำ... (#high @14:30 @2026-10-31 #Work)" 
+                    class="flex-1 rounded-xl px-4 py-2.5 text-xs text-slate-100 focus:outline-none" required>
+                <select id="task-priority" class="rounded-xl px-3 py-2.5 text-xs text-slate-300">
+                    <option value="medium">Medium (ปานกลาง)</option>
+                    <option value="high">High (สูง)</option>
+                    <option value="low">Low (ต่ำ)</option>
+                </select>
+            </div>
+            <div class="flex flex-wrap items-center justify-between gap-2">
+                <div class="flex items-center gap-2">
+                    <input type="text" id="task-category" placeholder="หมวดหมู่" value="Work" class="w-32 rounded-xl px-3 py-2 text-xs text-slate-300">
+                    <input type="date" id="task-due-date" class="rounded-xl px-3 py-2 text-xs text-slate-300">
+                    <input type="time" id="task-due-time" class="rounded-xl px-3 py-2 text-xs text-slate-300">
+                </div>
+                <div class="flex items-center gap-2">
+                    <label class="flex items-center gap-1.5 text-xs text-slate-300 cursor-pointer bg-slate-900/80 px-3 py-2 rounded-xl border border-slate-800">
+                        <input type="checkbox" id="task-is-routine" class="w-3.5 h-3.5 rounded border-slate-700 bg-slate-900 text-rose-600 accent-rose-500">
+                        <i class="fa-solid fa-repeat text-rose-400"></i> เป็นงานประจำวัน (Routine)
+                    </label>
+                    <button type="submit" class="bg-rose-600 hover:bg-rose-500 text-white px-5 py-2 rounded-xl text-xs font-medium transition flex items-center gap-2 shadow-lg shadow-rose-600/20 cursor-pointer">
+                        <i class="fa-solid fa-plus"></i> เพิ่มงาน
+                    </button>
+                </div>
+            </div>
+        </form>
+
+        <!-- Sort & Extra Views -->
+        <div class="flex flex-wrap items-center justify-between gap-3">
+            <div class="flex items-center gap-2">
+                <span class="text-xs text-slate-400">เรียงลำดับ:</span>
+                <select id="sort-select" onchange="renderTasks()" class="rounded-xl px-3 py-1.5 text-xs text-slate-300">
+                    <option value="latest">ล่าสุด</option>
+                    <option value="due_date">วันที่ส่งงานใกล้สุด</option>
+                    <option value="priority">ความสำคัญสูงสุด</option>
+                </select>
+            </div>
+            <div class="flex items-center gap-2">
+                <button onclick="setFilter('routine')" id="filter-routine" class="filter-btn bg-slate-900 border border-slate-800 text-slate-300 hover:text-white px-3 py-1.5 rounded-xl text-xs font-medium transition cursor-pointer">
+                    <i class="fa-solid fa-repeat text-rose-400"></i> งานประจำวัน
+                </button>
+                <button onclick="toggleModal('telegram-sim-modal')" class="bg-sky-500/10 border border-sky-500/20 text-sky-400 hover:bg-sky-500/20 px-3 py-1.5 rounded-xl text-xs font-medium transition flex items-center gap-1.5 cursor-pointer">
+                    <i class="fa-brands fa-telegram"></i> จำลอง Telegram Bot
+                </button>
+            </div>
+        </div>
+
+        <!-- Tasks List Container -->
+        <div id="tasks-container" class="space-y-3"></div>
+    </div>
+
+    <!-- Modals -->
+    <!-- Edit Task Modal -->
+    <div id="edit-task-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
+        <div class="glass-panel w-full max-w-md rounded-2xl p-6 space-y-4 border border-slate-700 shadow-2xl">
+            <div class="flex justify-between items-center border-b border-slate-800 pb-3">
+                <h3 class="text-sm font-bold text-slate-100 flex items-center gap-2">
+                    <i class="fa-solid fa-pen-to-square text-rose-500"></i> แก้ไขรายการงาน
+                </h3>
+                <button onclick="toggleModal('edit-task-modal')" class="text-slate-400 hover:text-slate-200"><i class="fa-solid fa-xmark text-base"></i></button>
+            </div>
+            <input type="hidden" id="edit-task-id">
             <div class="space-y-3">
                 <div>
-                    <label class="block text-[11px] font-medium text-slate-400 mb-1">ชื่อภารกิจ</label>
-                    <input type="text" id="edit-task-title" class="w-full px-3.5 py-2.5 rounded-xl text-xs">
-                </div>
-                <div>
-                    <label class="block text-[11px] font-medium text-slate-400 mb-1">ความสำคัญ</label>
-                    <select id="edit-task-priority" class="w-full px-3.5 py-2.5 rounded-xl text-xs">
-                        <option value="low">Low (ต่ำ)</option>
-                        <option value="medium">Medium (ปานกลาง)</option>
-                        <option value="high">High (ด่วนมาก)</option>
-                    </select>
+                    <label class="block text-xs font-medium text-slate-400 mb-1">หัวข้องาน</label>
+                    <input type="text" id="edit-task-title" class="w-full rounded-xl px-3 py-2 text-xs text-slate-100">
                 </div>
                 <div class="grid grid-cols-2 gap-3">
                     <div>
-                        <label class="block text-[11px] font-medium text-slate-400 mb-1">วันที่ส่งงาน</label>
-                        <input type="date" id="edit-task-due-date" class="w-full px-3 py-2 rounded-xl text-xs">
+                        <label class="block text-xs font-medium text-slate-400 mb-1">ความสำคัญ</label>
+                        <select id="edit-task-priority" class="w-full rounded-xl px-3 py-2 text-xs text-slate-100">
+                            <option value="high">High (สูง)</option>
+                            <option value="medium">Medium (ปานกลาง)</option>
+                            <option value="low">Low (ต่ำ)</option>
+                        </select>
                     </div>
                     <div>
-                        <label class="block text-[11px] font-medium text-slate-400 mb-1">เวลาส่งงาน</label>
-                        <input type="time" id="edit-task-due-time" class="w-full px-3 py-2 rounded-xl text-xs">
+                        <label class="block text-xs font-medium text-slate-400 mb-1">วันที่ส่งงาน</label>
+                        <input type="date" id="edit-task-due-date" class="w-full rounded-xl px-3 py-2 text-xs text-slate-100">
+                    </div>
+                </div>
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-xs font-medium text-slate-400 mb-1">เวลา</label>
+                        <input type="time" id="edit-task-due-time" class="w-full rounded-xl px-3 py-2 text-xs text-slate-100">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium text-slate-400 mb-1">สถานะงานประจำ</label>
+                        <label class="flex items-center gap-2 mt-2 text-xs text-slate-300 cursor-pointer">
+                            <input type="checkbox" id="edit-task-is-routine" class="w-4 h-4 rounded border-slate-700 bg-slate-900 text-rose-600 accent-rose-500"> งานประจำวัน
+                        </label>
                     </div>
                 </div>
             </div>
-
-            <div class="flex gap-2 pt-2">
-                <button onclick="saveEditTask()" class="flex-1 py-2.5 bg-rose-600 hover:bg-rose-500 text-white font-medium text-xs rounded-xl transition">
-                    บันทึกการแก้ไข
-                </button>
-                <button onclick="toggleModal('edit-task-modal')" class="px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs rounded-xl transition">
-                    ยกเลิก
-                </button>
+            <div class="flex justify-end gap-2 pt-2 border-t border-slate-800">
+                <button type="button" onclick="toggleModal('edit-task-modal')" class="px-4 py-2 rounded-xl text-xs font-medium text-slate-400 bg-slate-900 border border-slate-800">ยกเลิก</button>
+                <button type="button" onclick="saveEditTask()" class="px-5 py-2 rounded-xl text-xs font-medium text-white bg-rose-600 hover:bg-rose-500">บันทึก</button>
             </div>
         </div>
     </div>
 
-    <!-- Custom JavaScript -->
+    <!-- Telegram Simulator Modal -->
+    <div id="telegram-sim-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
+        <div class="glass-panel w-full max-w-lg rounded-2xl p-6 space-y-4 border border-slate-700 shadow-2xl">
+            <div class="flex justify-between items-center border-b border-slate-800 pb-3">
+                <h3 class="text-sm font-bold text-slate-100 flex items-center gap-2">
+                    <i class="fa-brands fa-telegram text-sky-400"></i> จำลองข้อความจาก Telegram Bot
+                </h3>
+                <button onclick="toggleModal('telegram-sim-modal')" class="text-slate-400 hover:text-slate-200"><i class="fa-solid fa-xmark text-base"></i></button>
+            </div>
+            <form onsubmit="handleSimulateTelegram(event)" class="space-y-3">
+                <div>
+                    <label class="block text-xs font-medium text-slate-400 mb-1">พิมพ์ข้อความสั่งการ:</label>
+                    <input type="text" id="sim-input-text" placeholder="/add ประชุมทีมงาน #high @14:30 @2026-11-01 #Work" class="w-full rounded-xl px-3 py-2.5 text-xs text-slate-100" required>
+                </div>
+                <div class="flex justify-end gap-2 pt-2 border-t border-slate-800">
+                    <button type="submit" class="px-5 py-2 rounded-xl text-xs font-medium text-white bg-sky-600 hover:bg-sky-500">จำลองการส่งข้อความ</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div id="toast-container" class="fixed bottom-4 right-4 z-50 space-y-2 pointer-events-none"></div>
+
     <script src="app.js"></script>
 </body>
 </html>
