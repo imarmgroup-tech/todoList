@@ -377,32 +377,79 @@ function renderTasks() {
         return true;
     });
 
+    filtered.sort((a, b) => {
+        if (sortVal === 'priority') {
+            const weight = { high: 3, medium: 2, low: 1 };
+            return (weight[b.priority] || 2) - (weight[a.priority] || 2);
+        } else if (sortVal === 'due_date') {
+            return (a.due_date || '9999-12-31').localeCompare(b.due_date || '9999-12-31');
+        } else {
+            return new Date(b.created_at || 0) - new Date(a.created_at || 0);
+        }
+    });
+
+    const countAll = document.getElementById('count-all');
+    const countPending = document.getElementById('count-pending');
+    const countCompleted = document.getElementById('count-completed');
+
+    if (countAll) countAll.textContent = tasks.length;
+    if (countPending) countPending.textContent = tasks.filter(t => !t.completed).length;
+    if (countCompleted) countCompleted.textContent = tasks.filter(t => t.completed).length;
+
     if (!container) return;
     if (filtered.length === 0) {
-        container.innerHTML = `<div class="glass-panel p-8 rounded-2xl text-center space-y-2"><i class="fa-solid fa-clipboard-list text-3xl text-slate-600"></i><p class="text-xs text-slate-400">ไม่พบรายการงานในตัวกรองนี้</p></div>`;
+        container.innerHTML = `<div class="glass-panel p-8 rounded-2xl text-center space-y-2 border border-neutral-800"><i class="fa-solid fa-clipboard-list text-3xl text-neutral-600"></i><p class="text-xs text-neutral-400">ไม่พบรายการงานในตัวกรองนี้</p></div>`;
         return;
     }
 
     container.innerHTML = filtered.map(t => {
+        const isOwner = t.user_id === currentUser?.id || currentUser?.email === ADMIN_EMAIL;
         const isOthers = t.user_id !== currentUser?.id;
-        const publicBadge = t.is_public ? '<span class="text-[10px] bg-sky-500/10 text-sky-400 border border-sky-500/20 px-2 py-0.5 rounded-md flex items-center gap-1"><i class="fa-solid fa-earth-americas"></i> Public</span>' : '';
+
+        const priorityBadge = t.priority === 'high' 
+            ? '<span class="text-[10px] bg-red-950/60 text-red-400 border border-red-800/50 px-2 py-0.5 rounded-md">High</span>' 
+            : t.priority === 'medium' 
+            ? '<span class="text-[10px] bg-amber-950/60 text-amber-400 border border-amber-800/50 px-2 py-0.5 rounded-md">Medium</span>' 
+            : '<span class="text-[10px] bg-emerald-950/60 text-emerald-400 border border-emerald-800/50 px-2 py-0.5 rounded-md">Low</span>';
+
+        const routineBadge = t.is_routine ? '<span class="text-[10px] bg-neutral-800 text-red-400 border border-neutral-700 px-2 py-0.5 rounded flex items-center gap-1"><i class="fa-solid fa-repeat"></i> งานประจำ</span>' : '';
+        const sourceBadge = t.source === 'telegram' ? '<span class="text-[10px] bg-neutral-800 text-white border border-neutral-700 px-2 py-0.5 rounded flex items-center gap-1"><i class="fa-brands fa-telegram text-red-500"></i> Telegram</span>' : '';
+        const publicBadge = t.is_public ? '<span class="text-[10px] bg-neutral-800 text-white border border-neutral-700 px-2 py-0.5 rounded-md flex items-center gap-1"><i class="fa-solid fa-earth-americas text-red-500"></i> Public</span>' : '';
 
         return `
-            <div class="glass-panel p-4 rounded-2xl flex items-center justify-between gap-3 transition hover:border-slate-700 ${t.completed ? 'opacity-60' : ''}">
+            <div class="glass-panel p-4 rounded-2xl flex items-center justify-between gap-3 transition hover:border-neutral-700 border border-neutral-800 ${t.completed ? 'opacity-60' : ''}">
                 <div class="flex items-center gap-3.5 flex-1 min-w-0">
-                    <input type="checkbox" ${t.completed ? 'checked' : ''} ${isOthers && currentUser?.email !== ADMIN_EMAIL ? 'disabled' : ''} onchange="toggleTaskComplete('${t.id}')" class="w-4 h-4 rounded border-slate-700 bg-slate-900 text-rose-600 cursor-pointer accent-rose-500">
+                    <input type="checkbox" ${t.completed ? 'checked' : ''} ${!isOwner ? 'disabled' : ''} onchange="toggleTaskComplete('${t.id}')" class="w-4 h-4 rounded border-neutral-700 bg-black text-red-600 cursor-pointer accent-red-600">
                     <div class="min-w-0 flex-1">
                         <div class="flex items-center gap-2 flex-wrap">
-                            <h4 class="text-xs font-semibold text-slate-200 truncate ${t.completed ? 'line-through text-slate-500' : ''}">${escapeHtml(t.title)}</h4>
+                            <h4 class="text-xs font-semibold text-white truncate ${t.completed ? 'line-through text-neutral-500' : ''}">${escapeHtml(t.title)}</h4>
+                            ${priorityBadge}
+                            ${routineBadge}
+                            ${sourceBadge}
                             ${publicBadge}
-                            ${isOthers ? '<span class="text-[10px] bg-purple-500/10 text-purple-400 border border-purple-500/20 px-2 py-0.5 rounded-md">ของสมาชิกท่านอื่น</span>' : ''}
+                            ${isOthers ? '<span class="text-[10px] bg-neutral-900 text-neutral-400 border border-neutral-800 px-2 py-0.5 rounded-md">สมาชิกคนอื่น</span>' : ''}
                         </div>
-                        <div class="flex items-center gap-3 text-[11px] text-slate-400 mt-1 flex-wrap">
-                            <span class="bg-slate-900 px-2 py-0.5 rounded border border-slate-800">${escapeHtml(t.category || 'Work')}</span>
-                            ${t.due_date ? `<span class="flex items-center gap-1 text-rose-400"><i class="fa-regular fa-calendar"></i> ${t.due_date}</span>` : ''}
+                        <div class="flex items-center gap-3 text-[11px] text-neutral-400 mt-1 flex-wrap">
+                            <span class="bg-neutral-900 px-2 py-0.5 rounded border border-neutral-800">${escapeHtml(t.category || 'Work')}</span>
+                            ${t.due_date ? `<span class="flex items-center gap-1 text-red-500"><i class="fa-regular fa-calendar"></i> ${t.due_date}</span>` : ''}
                             ${t.due_time ? `<span class="flex items-center gap-1 text-amber-400"><i class="fa-regular fa-clock"></i> ${t.due_time}</span>` : ''}
                         </div>
                     </div>
+                </div>
+
+                <!-- Action Buttons (ปุ่มจอง Google Calendar, ปุ่มแก้ไข, และปุ่มลบ) -->
+                <div class="flex items-center gap-1">
+                    <button onclick="addToCalendar('${t.id}')" class="p-2 text-neutral-400 hover:text-white transition cursor-pointer" title="จองลงปฏิทิน (Google Calendar)">
+                        <i class="fa-regular fa-calendar-plus text-xs"></i>
+                    </button>
+                    ${isOwner ? `
+                        <button onclick="openEditModal('${t.id}')" class="p-2 text-neutral-400 hover:text-white transition cursor-pointer" title="แก้ไขงาน">
+                            <i class="fa-solid fa-pen text-xs"></i>
+                        </button>
+                        <button onclick="deleteTask('${t.id}')" class="p-2 text-neutral-400 hover:text-red-500 transition cursor-pointer" title="ลบงาน">
+                            <i class="fa-solid fa-trash text-xs"></i>
+                        </button>
+                    ` : '<span class="text-[10px] text-neutral-500 italic px-2">อ่านอย่างเดียว</span>'}
                 </div>
             </div>
         `;
