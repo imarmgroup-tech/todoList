@@ -1,7 +1,4 @@
-// --- Supabase Config & State ---
-const SUPABASE_URL = "YOUR_SUPABASE_URL";       // ใส่ URL ของคุณที่นี่
-const SUPABASE_ANON_KEY = "YOUR_SUPABASE_KEY"; // ใส่ Anon Key ของคุณที่นี่
-
+// --- State Management ---
 let supabaseClient = null;
 let currentUser = null;
 let authMode = 'login'; // 'login' หรือ 'signup'
@@ -9,6 +6,7 @@ let tasks = [];
 let currentFilter = 'all';
 let realtimeSubscription = null;
 
+// --- Window Onload ---
 window.onload = function() {
     initDateDisplay();
     initSupabase();
@@ -24,11 +22,17 @@ function initDateDisplay() {
     }
 }
 
+// --- Supabase Initialization (ใช้องค์ประกอบจาก config.js) ---
 function initSupabase() {
     try {
+        if (typeof SUPABASE_URL === 'undefined' || typeof SUPABASE_ANON_KEY === 'undefined') {
+            showToast('ไม่พบไฟล์ config.js หรือค่ากำหนด Supabase', 'error');
+            return;
+        }
+
         supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
         
-        // ตรวจสอบการล็อกอินคงค้างอยู่ (Session Check)
+        // ตรวจสอบ Session การล็อกอินคงค้างอยู่
         supabaseClient.auth.getSession().then(({ data: { session } }) => {
             if (session) {
                 currentUser = session.user;
@@ -38,7 +42,7 @@ function initSupabase() {
             }
         });
 
-        // ฟัง Event การเปลี่ยนแปลงสถานะการล็อกอิน
+        // ฟัง Event การเปลี่ยนแปลงสถานะล็อกอิน
         supabaseClient.auth.onAuthStateChange((event, session) => {
             if (session) {
                 currentUser = session.user;
@@ -50,11 +54,12 @@ function initSupabase() {
         });
 
     } catch (err) {
+        console.error("Supabase Init Error:", err);
         showToast('ไม่สามารถเชื่อมต่อฐานข้อมูลได้', 'error');
     }
 }
 
-// --- Auth Handling ---
+// --- Auth Operations ---
 function setAuthMode(mode) {
     authMode = mode;
 }
@@ -83,24 +88,29 @@ async function handleLogout() {
 }
 
 function showAuthUI() {
-    document.getElementById('auth-container').classList.remove('hidden');
-    document.getElementById('app-container').classList.add('hidden');
+    const authBox = document.getElementById('auth-container');
+    const appBox = document.getElementById('app-container');
+    if (authBox) authBox.classList.remove('hidden');
+    if (appBox) appBox.classList.add('hidden');
 }
 
 function showAppUI() {
-    document.getElementById('auth-container').classList.add('hidden');
-    document.getElementById('app-container').classList.remove('hidden');
-    document.getElementById('user-email-display').textContent = currentUser.email;
+    const authBox = document.getElementById('auth-container');
+    const appBox = document.getElementById('app-container');
+    const userEmailEl = document.getElementById('user-email-display');
+
+    if (authBox) authBox.classList.add('hidden');
+    if (appBox) appBox.classList.remove('hidden');
+    if (userEmailEl && currentUser) userEmailEl.textContent = currentUser.email;
     
     fetchTasksFromSupabase();
     subscribeRealtime();
 }
 
-// --- Database & Tasks ---
+// --- Task CRUD Operations ---
 async function fetchTasksFromSupabase() {
     if (!supabaseClient || !currentUser) return;
 
-    // ดึงเฉพาะงานของ user ที่ล็อกอินอยู่เท่านั้น (ด้วย user_id)
     const { data, error } = await supabaseClient
         .from('todos')
         .select('*')
@@ -108,7 +118,7 @@ async function fetchTasksFromSupabase() {
         .order('created_at', { ascending: false });
 
     if (error) {
-        showToast('ไม่สามารถดึงข้อมูลได้', 'error');
+        showToast('ไม่สามารถดึงข้อมูลงานได้', 'error');
         return;
     }
 
@@ -157,7 +167,7 @@ async function handleAddTask(e) {
     if (!title || !currentUser) return;
 
     const newTask = { 
-        user_id: currentUser.id, // บันทึก user_id ผูกกับงาน
+        user_id: currentUser.id,
         title, 
         priority, 
         category, 
@@ -169,8 +179,9 @@ async function handleAddTask(e) {
     };
 
     const { error } = await supabaseClient.from('todos').insert([newTask]);
-    if (error) showToast('เกิดข้อผิดพลาดในการบันทึกข้อมูล', 'error');
-    else {
+    if (error) {
+        showToast('เกิดข้อผิดพลาดในการบันทึกข้อมูล', 'error');
+    } else {
         showToast('เพิ่มงานสำเร็จ!', 'success');
         document.getElementById('task-title').value = '';
         document.getElementById('task-due-date').value = '';
@@ -199,7 +210,10 @@ async function deleteTask(id) {
     if (!confirm('คุณต้องการลบงานนี้ใช่หรือไม่?')) return;
     const { error } = await supabaseClient.from('todos').delete().eq('id', id);
     if (error) showToast('ไม่สามารถลบข้อมูลได้', 'error');
-    else { showToast('ลบงานเรียบร้อย', 'success'); fetchTasksFromSupabase(); }
+    else { 
+        showToast('ลบงานเรียบร้อย', 'success'); 
+        fetchTasksFromSupabase(); 
+    }
 }
 
 function openEditModal(id) {
@@ -237,6 +251,7 @@ async function saveEditTask() {
     }
 }
 
+// --- Calendar Integration ---
 function addToCalendar(id) {
     const task = tasks.find(t => t.id == id);
     if (!task) return;
@@ -253,6 +268,7 @@ function addToCalendar(id) {
     window.open(gcalUrl, '_blank');
 }
 
+// --- Filters & Sorting ---
 function setFilter(filterType) {
     currentFilter = filterType;
     document.querySelectorAll('.filter-btn').forEach(btn => {
@@ -339,6 +355,7 @@ function updateAnalytics() {
     document.getElementById('header-progress-text').textContent = `${pct}%`;
 }
 
+// --- Telegram Simulation ---
 async function handleSimulateTelegram(e) {
     e.preventDefault();
     const text = document.getElementById('sim-input-text').value.trim();
@@ -377,7 +394,11 @@ async function handleSimulateTelegram(e) {
     }
 }
 
-function toggleModal(modalId) { document.getElementById(modalId).classList.toggle('hidden'); }
+// --- Helpers & UI ---
+function toggleModal(modalId) { 
+    const el = document.getElementById(modalId);
+    if (el) el.classList.toggle('hidden'); 
+}
 
 function showToast(message, type = 'success') {
     const container = document.getElementById('toast-container');
