@@ -103,6 +103,9 @@ function showAppUI() {
     setFilter('all');
     fetchTasksFromSupabase();
     subscribeRealtime();
+
+    // ตั้งค่าให้แสดงหน้าปฏิทินเป็นหน้าแรกทันที
+    switchView('calendar');
 }
 
 // --- Profile & Membership Management ---
@@ -541,7 +544,7 @@ function renderTasks() {
                     </div>
                 </div>
 
-                <!-- Action Buttons (ปุ่มจอง Google Calendar, ปุ่มแก้ไข, และปุ่มลบ) -->
+                <!-- Action Buttons -->
                 <div class="flex items-center gap-1">
                     <button onclick="addToCalendar('${t.id}')" class="p-2 text-neutral-400 hover:text-white transition cursor-pointer" title="จองลงปฏิทิน (Google Calendar)">
                         <i class="fa-regular fa-calendar-plus text-xs"></i>
