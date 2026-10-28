@@ -1,12 +1,14 @@
 // --- State Management ---
 let supabaseClient = null;
 let currentUser = null;
-let authMode = 'login'; // 'login' หรือ 'signup'
+let authMode = 'login';
 let tasks = [];
-let currentFilter = 'all'; // ตั้งค่าเริ่มต้นเป็นแสดงทั้งหมด
+let currentFilter = 'all';
 let realtimeSubscription = null;
 
-// --- Window Onload ---
+// กำหนดอีเมลที่เป็น Admin (จะสามารถมองเห็นงานทั้งหมดในระบบได้)
+const ADMIN_EMAIL = 'imarm.group@gmail.com'; 
+
 window.onload = function() {
     initDateDisplay();
     initSupabase();
@@ -22,7 +24,6 @@ function initDateDisplay() {
     }
 }
 
-// --- Supabase Initialization ---
 function initSupabase() {
     try {
         if (typeof SUPABASE_URL === 'undefined' || typeof SUPABASE_ANON_KEY === 'undefined') {
@@ -32,7 +33,6 @@ function initSupabase() {
 
         supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
         
-        // ตรวจสอบ Session การล็อกอินคงค้างอยู่
         supabaseClient.auth.getSession().then(({ data: { session } }) => {
             if (session) {
                 currentUser = session.user;
@@ -42,7 +42,6 @@ function initSupabase() {
             }
         });
 
-        // ฟัง Event การเปลี่ยนแปลงสถานะล็อกอิน
         supabaseClient.auth.onAuthStateChange((event, session) => {
             if (session) {
                 currentUser = session.user;
@@ -59,10 +58,7 @@ function initSupabase() {
     }
 }
 
-// --- Auth Operations ---
-function setAuthMode(mode) {
-    authMode = mode;
-}
+function setAuthMode(mode) { authMode = mode; }
 
 async function handleAuth(e) {
     e.preventDefault();
@@ -72,13 +68,13 @@ async function handleAuth(e) {
     if (!email || !password) return;
 
     if (authMode === 'login') {
-        const { data, error } = await supabaseClient.auth.signInWithPassword({ email, password });
+        const { error } = await supabaseClient.auth.signInWithPassword({ email, password });
         if (error) showToast('อีเมลหรือรหัสผ่านไม่ถูกต้อง', 'error');
         else showToast('เข้าสู่ระบบสำเร็จ! 👋', 'success');
     } else {
-        const { data, error } = await supabaseClient.auth.signUp({ email, password });
+        const { error } = await supabaseClient.auth.signUp({ email, password });
         if (error) showToast(error.message, 'error');
-        else showToast('สมัครสมาชิกสำเร็จ! (โปรดตรวจสอบอีเมลเพื่อยืนยันตัวตน)', 'success');
+        else showToast('สมัครสมาชิกสำเร็จ!', 'success');
     }
 }
 
@@ -88,22 +84,20 @@ async function handleLogout() {
 }
 
 function showAuthUI() {
-    const authBox = document.getElementById('auth-container');
-    const appBox = document.getElementById('app-container');
-    if (authBox) authBox.classList.remove('hidden');
-    if (appBox) appBox.classList.add('hidden');
+    document.getElementById('auth-container')?.classList.remove('hidden');
+    document.getElementById('app-container')?.classList.add('hidden');
 }
 
 function showAppUI() {
-    const authBox = document.getElementById('auth-container');
-    const appBox = document.getElementById('app-container');
-    const userEmailEl = document.getElementById('user-email-display');
-
-    if (authBox) authBox.classList.add('hidden');
-    if (appBox) appBox.classList.remove('hidden');
-    if (userEmailEl && currentUser) userEmailEl.textContent = currentUser.email;
+    document.getElementById('auth-container')?.classList.add('hidden');
+    document.getElementById('app-container')?.classList.remove('hidden');
     
-    // ตั้งค่าตัวกรองเริ่มต้นเป็น 'all' เสมอเมื่อเข้าสู่ระบบ
+    const userEmailEl = document.getElementById('user-email-display');
+    if (userEmailEl && currentUser) {
+        const isAdmin = currentUser.email === ADMIN_EMAIL;
+        userEmailEl.innerHTML = `${currentUser.email} ${isAdmin ? '<span class="bg-rose-500/20 text-rose-400 px-1.5 py-0.5 rounded text-[10px] ml-1">Admin</span>' : ''}`;
+    }
+    
     setFilter('all');
     fetchTasksFromSupabase();
     subscribeRealtime();
@@ -113,13 +107,17 @@ function showAppUI() {
 async function fetchTasksFromSupabase() {
     if (!supabaseClient || !currentUser) return;
 
-    const { data, error } = await supabaseClient
-        .from('todos')
-        .select('*')
-        .eq('user_id', currentUser.id)
-        .order('created_at', { ascending: false });
+    let query = supabaseClient.from('todos').select('*');
+
+    // ถ้าไม่ใช่ Admin ให้ดึงเฉพาะงานของตัวเอง
+    if (currentUser.email !== ADMIN_EMAIL) {
+        query = query.eq('user_id', currentUser.id);
+    }
+
+    const { data, error } = await query.order('created_at', { ascending: false });
 
     if (error) {
+        console.error("Fetch Error:", error);
         showToast('ไม่สามารถดึงข้อมูลงานได้', 'error');
         return;
     }
@@ -135,14 +133,16 @@ function subscribeRealtime() {
 
     if (realtimeSubscription) supabaseClient.removeChannel(realtimeSubscription);
     
+    let channelConfig = { event: '*', schema: 'public', table: 'todos' };
+    
+    // ถ้าไม่ใช่ Admin ให้กรองเฉพาะ user_id ของตัวเองใน Realtime ด้วย
+    if (currentUser.email !== ADMIN_EMAIL) {
+        channelConfig.filter = `user_id=eq.${currentUser.id}`;
+    }
+
     realtimeSubscription = supabaseClient
         .channel('public:todos')
-        .on('postgres_changes', { 
-            event: '*', 
-            schema: 'public', 
-            table: 'todos',
-            filter: `user_id=eq.${currentUser.id}`
-        }, payload => {
+        .on('postgres_changes', channelConfig, () => {
             fetchTasksFromSupabase();
         })
         .subscribe();
@@ -182,7 +182,8 @@ async function handleAddTask(e) {
 
     const { error } = await supabaseClient.from('todos').insert([newTask]);
     if (error) {
-        showToast('เกิดข้อผิดพลาดในการบันทึกข้อมูล', 'error');
+        console.error("Insert Error:", error);
+        showToast('เกิดข้อผิดพลาดในการเพิ่มงาน (ตรวจสอบ RLS Policy)', 'error');
     } else {
         showToast('เพิ่มงานสำเร็จ!', 'success');
         document.getElementById('task-title').value = '';
@@ -253,7 +254,6 @@ async function saveEditTask() {
     }
 }
 
-// --- Calendar Integration ---
 function addToCalendar(id) {
     const task = tasks.find(t => t.id == id);
     if (!task) return;
@@ -270,11 +270,8 @@ function addToCalendar(id) {
     window.open(gcalUrl, '_blank');
 }
 
-// --- Filters & Sorting ---
 function setFilter(filterType) {
     currentFilter = filterType;
-    
-    // รีเซตสไตล์ปุ่มตัวกรองหลัก (ทั้งหมด, ค้าง, เสร็จ)
     ['all', 'pending', 'completed'].forEach(type => {
         const btn = document.getElementById(`filter-${type}`);
         if (btn) {
@@ -284,7 +281,6 @@ function setFilter(filterType) {
         }
     });
 
-    // รีเซตสไตล์ปุ่มตัวกรองเสริม (งานประจำวัน)
     const routineBtn = document.getElementById('filter-routine');
     if (routineBtn) {
         routineBtn.className = filterType === 'routine' 
@@ -304,7 +300,7 @@ function renderTasks() {
         if (currentFilter === 'completed') return t.completed;
         if (currentFilter === 'routine') return t.is_routine;
         if (currentFilter === 'telegram') return t.source === 'telegram';
-        return true; // 'all'
+        return true;
     });
 
     filtered.sort((a, b) => {
@@ -318,13 +314,9 @@ function renderTasks() {
         }
     });
 
-    const countAll = document.getElementById('count-all');
-    const countPending = document.getElementById('count-pending');
-    const countCompleted = document.getElementById('count-completed');
-
-    if (countAll) countAll.textContent = tasks.length;
-    if (countPending) countPending.textContent = tasks.filter(t => !t.completed).length;
-    if (countCompleted) countCompleted.textContent = tasks.filter(t => t.completed).length;
+    document.getElementById('count-all').textContent = tasks.length;
+    document.getElementById('count-pending').textContent = tasks.filter(t => !t.completed).length;
+    document.getElementById('count-completed').textContent = tasks.filter(t => t.completed).length;
 
     if (!container) return;
     if (filtered.length === 0) {
@@ -375,7 +367,6 @@ function updateAnalytics() {
     document.getElementById('header-progress-text').textContent = `${pct}%`;
 }
 
-// --- Telegram Simulation ---
 async function handleSimulateTelegram(e) {
     e.preventDefault();
     const text = document.getElementById('sim-input-text').value.trim();
@@ -414,7 +405,6 @@ async function handleSimulateTelegram(e) {
     }
 }
 
-// --- Helpers & UI ---
 function toggleModal(modalId) { 
     const el = document.getElementById(modalId);
     if (el) el.classList.toggle('hidden'); 
