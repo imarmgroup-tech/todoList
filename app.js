@@ -97,7 +97,7 @@ function showAppUI() {
     const userEmailEl = document.getElementById('user-email-display');
     if (userEmailEl && currentUser) {
         const isAdmin = currentUser.email === ADMIN_EMAIL;
-        userEmailEl.innerHTML = `${currentUser.email} ${isAdmin ? '<span class="bg-rose-500/20 text-rose-400 px-1.5 py-0.5 rounded text-[10px] ml-1">Admin</span>' : ''}`;
+        userEmailEl.innerHTML = `${currentUser.email} ${isAdmin ? '<span class="bg-red-950/80 text-red-400 border border-red-800/50 px-1.5 py-0.5 rounded text-[10px] ml-1">Admin</span>' : ''}`;
     }
     
     setFilter('all');
@@ -105,11 +105,44 @@ function showAppUI() {
     subscribeRealtime();
 }
 
+// --- Profile & Membership Management ---
+function openProfileModal() {
+    if (!currentUser) return;
+    
+    document.getElementById('profile-email-text').textContent = currentUser.email;
+    document.getElementById('profile-id-text').textContent = currentUser.id;
+    
+    const isAdmin = currentUser.email === ADMIN_EMAIL;
+    document.getElementById('profile-role-text').innerHTML = isAdmin 
+        ? '<span class="text-red-500 font-bold">ผู้ดูแลระบบ (Admin)</span>' 
+        : 'สมาชิกทั่วไป (Standard User)';
+        
+    document.getElementById('new-password').value = '';
+    toggleModal('profile-modal');
+}
+
+async function updatePassword() {
+    const newPassword = document.getElementById('new-password').value;
+    if (!newPassword || newPassword.length < 6) {
+        showToast('กรุณากรอกรหัสผ่านใหม่อย่างน้อย 6 ตัวอักษร', 'error');
+        return;
+    }
+
+    const { error } = await supabaseClient.auth.updateUser({ password: newPassword });
+    
+    if (error) {
+        showToast('ไม่สามารถเปลี่ยนรหัสผ่านได้: ' + error.message, 'error');
+    } else {
+        showToast('เปลี่ยนรหัสผ่านสำเร็จเรียบร้อย! 🔒', 'success');
+        document.getElementById('new-password').value = '';
+        toggleModal('profile-modal');
+    }
+}
+
 // --- Task CRUD Operations ---
 async function fetchTasksFromSupabase() {
     if (!supabaseClient || !currentUser) return;
 
-    // RLS จะทำหน้าที่กรองให้อัตโนมัติ: (งานตัวเอง OR งานที่เป็น Public OR Admin ดึงหมด)
     const { data, error } = await supabaseClient
         .from('todos')
         .select('*')
@@ -178,7 +211,7 @@ async function handleAddTask(e) {
     const { error } = await supabaseClient.from('todos').insert([newTask]);
     if (error) {
         console.error("Insert Error:", error);
-        showToast('เกิดข้อผิดพลาดในการเพิ่มงาน', 'error');
+        showToast('เกิดข้อผิดพลาดในการเพิ่มงาน (ตรวจสอบ RLS Policy)', 'error');
     } else {
         showToast('เพิ่มงานสำเร็จ!', 'success');
         document.getElementById('task-title').value = '';
@@ -194,8 +227,8 @@ async function toggleTaskComplete(id) {
     const task = tasks.find(t => t.id == id);
     if (!task) return;
     
-    // ห้ามแก้ของคนอื่น ถ้าไม่ใช่เจ้าของหรือ Admin
-    if (task.user_id !== currentUser.id && currentUser.email !== ADMIN_EMAIL) {
+    const isOwner = task.user_id === currentUser?.id || currentUser?.email === ADMIN_EMAIL;
+    if (!isOwner) {
         showToast('คุณไม่มีสิทธิ์แก้ไขงานของสมาชิกท่านอื่น', 'error');
         return;
     }
@@ -216,7 +249,8 @@ async function deleteTask(id) {
     const task = tasks.find(t => t.id == id);
     if (!task) return;
 
-    if (task.user_id !== currentUser.id && currentUser.email !== ADMIN_EMAIL) {
+    const isOwner = task.user_id === currentUser?.id || currentUser?.email === ADMIN_EMAIL;
+    if (!isOwner) {
         showToast('คุณไม่มีสิทธิ์ลบงานของสมาชิกท่านอื่น', 'error');
         return;
     }
@@ -230,7 +264,58 @@ async function deleteTask(id) {
     }
 }
 
-// --- Calendar View & Public Badge ---
+function openEditModal(id) {
+    const task = tasks.find(t => t.id == id);
+    if (!task) return;
+    document.getElementById('edit-task-id').value = task.id;
+    document.getElementById('edit-task-title').value = task.title;
+    document.getElementById('edit-task-priority').value = task.priority;
+    document.getElementById('edit-task-due-date').value = task.due_date || '';
+    document.getElementById('edit-task-due-time').value = task.due_time || '';
+    document.getElementById('edit-task-is-routine').checked = task.is_routine || false;
+    toggleModal('edit-task-modal');
+}
+
+async function saveEditTask() {
+    const id = document.getElementById('edit-task-id').value;
+    const title = document.getElementById('edit-task-title').value.trim();
+    const priority = document.getElementById('edit-task-priority').value;
+    const due_date = document.getElementById('edit-task-due-date').value || null;
+    const due_time = document.getElementById('edit-task-due-time').value || null;
+    const is_routine = document.getElementById('edit-task-is-routine').checked;
+
+    if (!title) return;
+
+    const { error } = await supabaseClient
+        .from('todos')
+        .update({ title, priority, due_date, due_time, is_routine })
+        .eq('id', id);
+
+    if (error) showToast('แก้ไขข้อมูลไม่สำเร็จ', 'error');
+    else { 
+        showToast('บันทึกการแก้ไขเรียบร้อย', 'success'); 
+        toggleModal('edit-task-modal'); 
+        fetchTasksFromSupabase(); 
+    }
+}
+
+function addToCalendar(id) {
+    const task = tasks.find(t => t.id == id);
+    if (!task) return;
+
+    const title = encodeURIComponent(task.title);
+    const details = encodeURIComponent(`หมวดหมู่: ${task.category || 'Work'} | ความสำคัญ: ${task.priority}`);
+    
+    let dateStr = task.due_date ? task.due_date.replace(/-/g, '') : new Date().toISOString().split('T')[0].replace(/-/g, '');
+    let timeStr = task.due_time ? task.due_time.replace(':', '') + '00' : '090000';
+    let startDateTime = `${dateStr}T${timeStr}Z`;
+    let endDateTime = `${dateStr}T${parseInt(timeStr.slice(0,2))+1}${timeStr.slice(2)}Z`;
+
+    const gcalUrl = `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${title}&dates=${startDateTime}/${endDateTime}&details=${details}`;
+    window.open(gcalUrl, '_blank');
+}
+
+// --- Calendar View Management ---
 function switchView(viewType) {
     const taskContainer = document.getElementById('tasks-container');
     const calendarContainer = document.getElementById('calendar-container');
@@ -240,13 +325,13 @@ function switchView(viewType) {
     if (viewType === 'list') {
         taskContainer.classList.remove('hidden');
         calendarContainer.classList.add('hidden');
-        btnList.className = 'bg-rose-600 text-white px-3 py-1.5 rounded-xl text-xs font-medium transition cursor-pointer';
-        btnCal.className = 'bg-slate-900 border border-slate-800 text-slate-300 hover:text-white px-3 py-1.5 rounded-xl text-xs font-medium transition cursor-pointer';
+        btnList.className = 'bg-red-600 text-white px-3 py-1.5 rounded-xl text-xs font-medium transition cursor-pointer';
+        btnCal.className = 'bg-neutral-900 border border-neutral-800 text-neutral-300 hover:text-white px-3 py-1.5 rounded-xl text-xs font-medium transition cursor-pointer';
     } else {
         taskContainer.classList.add('hidden');
         calendarContainer.classList.remove('hidden');
-        btnCal.className = 'bg-rose-600 text-white px-3 py-1.5 rounded-xl text-xs font-medium transition cursor-pointer';
-        btnList.className = 'bg-slate-900 border border-slate-800 text-slate-300 hover:text-white px-3 py-1.5 rounded-xl text-xs font-medium transition cursor-pointer';
+        btnCal.className = 'bg-red-600 text-white px-3 py-1.5 rounded-xl text-xs font-medium transition cursor-pointer';
+        btnList.className = 'bg-neutral-900 border border-neutral-800 text-neutral-300 hover:text-white px-3 py-1.5 rounded-xl text-xs font-medium transition cursor-pointer';
         renderCalendar();
     }
 }
@@ -272,7 +357,7 @@ function renderCalendar() {
 
     let html = '';
     for (let i = 0; i < firstDayIndex; i++) {
-        html += `<div class="h-24 bg-slate-900/20 rounded-xl border border-slate-800/40 opacity-30"></div>`;
+        html += `<div class="h-28 bg-neutral-900/20 rounded-xl border border-neutral-800/40 opacity-30"></div>`;
     }
 
     const todayStr = new Date().toISOString().split('T')[0];
@@ -286,17 +371,17 @@ function renderCalendar() {
         const isToday = dateStr === todayStr;
 
         html += `
-            <div onclick="openDateModal('${dateStr}')" class="h-28 bg-slate-900/60 border ${isToday ? 'border-rose-500 shadow-lg shadow-rose-500/10' : 'border-slate-800'} rounded-xl p-1.5 flex flex-col justify-between transition hover:border-slate-600 cursor-pointer overflow-hidden">
+            <div onclick="openDateModal('${dateStr}')" class="h-32 bg-neutral-900/60 border ${isToday ? 'border-red-600 shadow-lg shadow-red-950/40' : 'border-neutral-800'} rounded-xl p-1.5 flex flex-col justify-between transition hover:border-neutral-600 cursor-pointer overflow-hidden">
                 <div class="flex justify-between items-center text-[11px]">
-                    <span class="font-bold ${isToday ? 'bg-rose-600 text-white px-1.5 rounded-full' : 'text-slate-300'}">${day}</span>
-                    ${dayTasks.length > 0 ? `<span class="bg-rose-500/20 text-rose-400 px-1 rounded text-[9px]">${dayTasks.length} งาน</span>` : ''}
+                    <span class="font-bold ${isToday ? 'bg-red-600 text-white px-1.5 rounded-full' : 'text-neutral-300'}">${day}</span>
+                    ${dayTasks.length > 0 ? `<span class="bg-red-950/80 text-red-400 border border-red-800/50 px-1 rounded text-[9px]">${dayTasks.length} งาน</span>` : ''}
                 </div>
                 <div class="flex-1 overflow-y-auto space-y-1 mt-1 scrollbar-none">
                     ${dayTasks.map(t => {
                         const isOthers = t.user_id !== currentUser?.id;
                         return `
-                            <div class="text-[10px] ${isOthers ? 'bg-sky-950/80 border-sky-800 text-sky-200' : 'bg-slate-800/80 border-slate-700/50 text-slate-200'} border px-1.5 py-0.5 rounded truncate ${t.completed ? 'line-through opacity-50' : ''}" title="${escapeHtml(t.title)} ${isOthers ? '(ของสมาชิกคนอื่น)' : ''}">
-                                ${t.is_public ? '<i class="fa-solid fa-earth-americas text-[9px] text-sky-400 mr-0.5"></i>' : ''} ${escapeHtml(t.title)}
+                            <div class="text-[10px] ${isOthers ? 'bg-neutral-900 border-neutral-700 text-neutral-300' : 'bg-neutral-800 border-neutral-700 text-white'} border px-1.5 py-0.5 rounded truncate ${t.completed ? 'line-through opacity-50' : ''}" title="${escapeHtml(t.title)}">
+                                ${t.is_public ? '<i class="fa-solid fa-earth-americas text-[9px] text-red-500 mr-0.5"></i>' : ''} ${escapeHtml(t.title)}
                             </div>
                         `;
                     }).join('')}
@@ -321,27 +406,27 @@ function openDateModal(dateStr) {
 
     if (listContainer) {
         if (dayTasks.length === 0) {
-            listContainer.innerHTML = `<p class="text-xs text-slate-400 text-center py-4">ไม่มีรายการงานในวันนี้</p>`;
+            listContainer.innerHTML = `<p class="text-xs text-neutral-400 text-center py-4">ไม่มีรายการงานในวันนี้</p>`;
         } else {
             listContainer.innerHTML = dayTasks.map(t => {
                 const isOwner = t.user_id === currentUser?.id || currentUser?.email === ADMIN_EMAIL;
                 return `
-                    <div class="bg-slate-900/80 border ${t.user_id !== currentUser?.id ? 'border-sky-800/60' : 'border-slate-800'} p-3 rounded-xl flex items-center justify-between gap-2">
+                    <div class="bg-neutral-900 border border-neutral-800 p-3 rounded-xl flex items-center justify-between gap-2">
                         <div class="flex items-center gap-2.5 min-w-0">
-                            <input type="checkbox" ${t.completed ? 'checked' : ''} ${!isOwner ? 'disabled' : ''} onchange="toggleTaskComplete('${t.id}'); openDateModal('${dateStr}');" class="w-4 h-4 rounded border-slate-700 bg-slate-900 text-rose-600 cursor-pointer accent-rose-500">
+                            <input type="checkbox" ${t.completed ? 'checked' : ''} ${!isOwner ? 'disabled' : ''} onchange="toggleTaskComplete('${t.id}'); openDateModal('${dateStr}');" class="w-4 h-4 rounded border-neutral-700 bg-black text-red-600 cursor-pointer accent-red-600">
                             <div class="min-w-0">
-                                <p class="text-xs font-semibold text-slate-200 truncate ${t.completed ? 'line-through text-slate-500' : ''}">
-                                    ${t.is_public ? '<span class="text-[9px] bg-sky-500/20 text-sky-400 px-1 py-0.5 rounded mr-1">Public</span>' : ''}
+                                <p class="text-xs font-semibold text-white truncate ${t.completed ? 'line-through text-neutral-500' : ''}">
+                                    ${t.is_public ? '<span class="text-[9px] bg-red-950/80 text-red-400 border border-red-800/50 px-1 py-0.5 rounded mr-1">Public</span>' : ''}
                                     ${escapeHtml(t.title)}
                                 </p>
-                                <p class="text-[10px] text-slate-400">หมวดหมู่: ${escapeHtml(t.category || 'Work')} ${t.due_time ? `| เวลา: ${t.due_time}` : ''}</p>
+                                <p class="text-[10px] text-neutral-400">หมวดหมู่: ${escapeHtml(t.category || 'Work')} ${t.due_time ? `| เวลา: ${t.due_time}` : ''}</p>
                             </div>
                         </div>
                         ${isOwner ? `
-                            <button onclick="deleteTask('${t.id}'); openDateModal('${dateStr}');" class="text-slate-500 hover:text-rose-400 p-1 cursor-pointer" title="ลบงาน">
+                            <button onclick="deleteTask('${t.id}'); openDateModal('${dateStr}');" class="text-neutral-500 hover:text-red-500 p-1 cursor-pointer" title="ลบงาน">
                                 <i class="fa-solid fa-trash text-xs"></i>
                             </button>
-                        ` : '<span class="text-[10px] text-slate-500 italic">อ่านอย่างเดียว</span>'}
+                        ` : '<span class="text-[10px] text-neutral-500 italic">อ่านอย่างเดียว</span>'}
                     </div>
                 `;
             }).join('');
@@ -351,17 +436,36 @@ function openDateModal(dateStr) {
     toggleModal('day-tasks-modal');
 }
 
-// --- Helpers & UI ---
+function jumpToAddFormWithDate() {
+    toggleModal('day-tasks-modal');
+    const dueDateInput = document.getElementById('task-due-date');
+    if (dueDateInput && selectedCalendarDateStr) {
+        dueDateInput.value = selectedCalendarDateStr;
+        switchView('list');
+        showToast(`เลือกวันที่ ${selectedCalendarDateStr} แล้ว กรอกรายละเอียดด้านบนได้เลย`, 'success');
+        document.getElementById('task-title').focus();
+    }
+}
+
+// --- Filters & Sorting ---
 function setFilter(filterType) {
     currentFilter = filterType;
     ['all', 'pending', 'completed'].forEach(type => {
         const btn = document.getElementById(`filter-${type}`);
         if (btn) {
             btn.className = type === filterType 
-                ? 'filter-btn bg-rose-600 text-white px-2.5 py-1 rounded-lg text-xs font-medium transition cursor-pointer' 
-                : 'filter-btn text-slate-400 hover:text-slate-200 px-2.5 py-1 rounded-lg text-xs font-medium transition cursor-pointer';
+                ? 'filter-btn bg-red-600 text-white px-2.5 py-1 rounded-lg text-xs font-medium transition cursor-pointer' 
+                : 'filter-btn text-neutral-400 hover:text-white px-2.5 py-1 rounded-lg text-xs font-medium transition cursor-pointer';
         }
     });
+
+    const routineBtn = document.getElementById('filter-routine');
+    if (routineBtn) {
+        routineBtn.className = filterType === 'routine' 
+            ? 'filter-btn bg-red-600 text-white px-3 py-1.5 rounded-xl text-xs font-medium transition cursor-pointer' 
+            : 'filter-btn bg-neutral-900 border border-neutral-800 text-neutral-300 hover:text-white px-3 py-1.5 rounded-xl text-xs font-medium transition cursor-pointer';
+    }
+
     renderTasks();
 }
 
@@ -466,6 +570,45 @@ function updateAnalytics() {
     document.getElementById('header-progress-text').textContent = `${pct}%`;
 }
 
+async function handleSimulateTelegram(e) {
+    e.preventDefault();
+    const text = document.getElementById('sim-input-text').value.trim();
+    if (!text || !currentUser) return;
+    
+    let priority = 'medium';
+    if (text.includes('#high')) priority = 'high';
+    if (text.includes('#low')) priority = 'low';
+    let category = 'Work';
+    if (text.includes('#Personal')) category = 'Personal';
+
+    const timeMatch = text.match(/@(\d{2}:\d{2})/);
+    const due_time = timeMatch ? timeMatch[1] : null;
+    const dateMatch = text.match(/@(\d{4}-\d{2}-\d{2})/);
+    const due_date = dateMatch ? dateMatch[1] : null;
+    let cleanTitle = text.replace('/add', '').replace(/#\w+/g, '').replace(/@\d{2}:\d{2}/g, '').replace(/@\d{4}-\d{2}-\d{2}/g, '').trim();
+
+    const newTelegramTask = { 
+        user_id: currentUser.id,
+        title: cleanTitle || 'งานจาก Telegram', 
+        priority, 
+        category, 
+        due_date, 
+        due_time, 
+        is_routine: false, 
+        is_public: false,
+        completed: false, 
+        source: 'telegram' 
+    };
+
+    const { error } = await supabaseClient.from('todos').insert([newTelegramTask]);
+    if (error) showToast('ซิงค์ Telegram ไม่สำเร็จ', 'error');
+    else { 
+        showToast('จำลองข้อความจาก Telegram สำเร็จ! 📲', 'success'); 
+        toggleModal('telegram-sim-modal'); 
+        fetchTasksFromSupabase(); 
+    }
+}
+
 function toggleModal(modalId) { 
     const el = document.getElementById(modalId);
     if (el) el.classList.toggle('hidden'); 
@@ -475,8 +618,8 @@ function showToast(message, type = 'success') {
     const container = document.getElementById('toast-container');
     if (!container) return;
     const toast = document.createElement('div');
-    toast.className = `p-3 rounded-xl text-xs font-medium text-white shadow-lg pointer-events-auto transition transform translate-y-2 opacity-0 flex items-center gap-2 ${type === 'success' ? 'bg-emerald-600' : 'bg-rose-600'}`;
-    toast.innerHTML = `<i class="fa-solid ${type === 'success' ? 'fa-circle-check' : 'fa-triangle-exclamation'}"></i> ${escapeHtml(message)}`;
+    toast.className = `p-3 rounded-xl text-xs font-medium text-white shadow-lg pointer-events-auto transition transform translate-y-2 opacity-0 flex items-center gap-2 ${type === 'success' ? 'bg-neutral-900 border border-neutral-700 text-white' : 'bg-red-950 border border-red-800 text-red-300'}`;
+    toast.innerHTML = `<i class="fa-solid ${type === 'success' ? 'fa-circle-check text-red-500' : 'fa-triangle-exclamation text-red-500'}"></i> ${escapeHtml(message)}`;
     container.appendChild(toast);
     setTimeout(() => toast.classList.remove('translate-y-2', 'opacity-0'), 10);
     setTimeout(() => { toast.classList.add('opacity-0', 'translate-y-2'); setTimeout(() => toast.remove(), 300); }, 3000);
@@ -484,17 +627,4 @@ function showToast(message, type = 'success') {
 
 function escapeHtml(str) {
     return String(str || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;');
-}
-// อัปเดตฟังก์ชันนี้ใน app.js ของคุณ
-function jumpToAddFormWithDate() {
-    // ปิด Modal รายการงานประจำวันก่อน
-    toggleModal('day-tasks-modal');
-    
-    const dueDateInput = document.getElementById('task-due-date');
-    if (dueDateInput && selectedCalendarDateStr) {
-        dueDateInput.value = selectedCalendarDateStr;
-        switchView('list'); // สลับกลับมาหน้าแสดงผลรายการปกติ
-        showToast(`เลือกวันที่ ${selectedCalendarDateStr} แล้ว กรอกรายละเอียดด้านบนได้เลย`, 'success');
-        document.getElementById('task-title').focus();
-    }
 }
