@@ -286,7 +286,29 @@
     </div>
 
     <div id="toast-container" class="fixed bottom-4 right-4 z-50 space-y-2 pointer-events-none"></div>
+<!-- Day Tasks Modal (หน้าต่างแสดงงานของวันที่เลือกในปฏิทิน) -->
+<div id="day-tasks-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
+    <div class="glass-panel w-full max-w-md rounded-2xl p-6 space-y-4 border border-slate-700 shadow-2xl">
+        <div class="flex justify-between items-center border-b border-slate-800 pb-3">
+            <h3 class="text-sm font-bold text-slate-100 flex items-center gap-2">
+                <i class="fa-regular fa-calendar-days text-rose-500"></i> งานประจำวันที่ <span id="modal-date-title" class="text-rose-400">--</span>
+            </h3>
+            <button onclick="toggleModal('day-tasks-modal')" class="text-slate-400 hover:text-slate-200 cursor-pointer"><i class="fa-solid fa-xmark text-base"></i></button>
+        </div>
 
+        <!-- รายการงานในวันนั้นๆ -->
+        <div id="modal-day-tasks-list" class="space-y-2 max-h-60 overflow-y-auto">
+            <!-- รายการงานจะถูกแสดงที่นี่ -->
+        </div>
+
+        <div class="flex justify-between items-center pt-2 border-t border-slate-800">
+            <button type="button" onclick="jumpToAddFormWithDate()" class="bg-rose-600 hover:bg-rose-500 text-white px-4 py-2 rounded-xl text-xs font-medium transition cursor-pointer flex items-center gap-1.5">
+                <i class="fa-solid fa-plus"></i> เพิ่มงานในวันนี้
+            </button>
+            <button type="button" onclick="toggleModal('day-tasks-modal')" class="px-4 py-2 rounded-xl text-xs font-medium text-slate-400 bg-slate-900 border border-slate-800 cursor-pointer">ปิด</button>
+        </div>
+    </div>
+</div>
     <!-- Script Loads -->
     <script src="config.js"></script>
     <script src="app.js"></script>
