@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Web Todo App + Telegram Bot & Auth</title>
+    <title>Web Todo App + Telegram Bot & Calendar</title>
     <!-- Tailwind CSS & FontAwesome -->
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
@@ -127,10 +127,16 @@
             </div>
         </form>
 
-        <!-- Sort & Extra Views -->
+        <!-- View Switcher, Sort & Extra Actions -->
         <div class="flex flex-wrap items-center justify-between gap-3">
             <div class="flex items-center gap-2">
-                <span class="text-xs text-slate-400">เรียงลำดับ:</span>
+                <button onclick="switchView('list')" id="view-btn-list" class="bg-rose-600 text-white px-3 py-1.5 rounded-xl text-xs font-medium transition cursor-pointer">
+                    <i class="fa-solid fa-list-check"></i> รายการ
+                </button>
+                <button onclick="switchView('calendar')" id="view-btn-calendar" class="bg-slate-900 border border-slate-800 text-slate-300 hover:text-white px-3 py-1.5 rounded-xl text-xs font-medium transition cursor-pointer">
+                    <i class="fa-regular fa-calendar-days"></i> ปฏิทิน
+                </button>
+                <span class="text-xs text-slate-400 ml-2">เรียงลำดับ:</span>
                 <select id="sort-select" onchange="renderTasks()" class="rounded-xl px-3 py-1.5 text-xs text-slate-300">
                     <option value="latest">ล่าสุด</option>
                     <option value="due_date">วันที่ส่งงานใกล้สุด</option>
@@ -142,13 +148,36 @@
                     <i class="fa-solid fa-repeat text-rose-400"></i> งานประจำวัน
                 </button>
                 <button onclick="toggleModal('telegram-sim-modal')" class="bg-sky-500/10 border border-sky-500/20 text-sky-400 hover:bg-sky-500/20 px-3 py-1.5 rounded-xl text-xs font-medium transition flex items-center gap-1.5 cursor-pointer">
-                    <i class="fa-brands fa-telegram"></i> จำลอง Telegram Bot
+                    <i class="fa-brands fa-telegram"></i> Telegram Bot
                 </button>
             </div>
         </div>
 
         <!-- Tasks List Container -->
         <div id="tasks-container" class="space-y-3"></div>
+
+        <!-- Calendar View Container (ซ่อนไว้เริ่มต้น) -->
+        <div id="calendar-container" class="hidden glass-panel rounded-2xl p-5 space-y-4">
+            <div class="flex justify-between items-center">
+                <button onclick="changeMonth(-1)" class="bg-slate-900 border border-slate-800 text-slate-300 hover:text-white px-3 py-1.5 rounded-xl text-xs transition cursor-pointer">
+                    <i class="fa-solid fa-chevron-left"></i> เดือนก่อนหน้า
+                </button>
+                <h3 id="calendar-month-year" class="text-sm font-bold text-slate-100">ตุลาคม 2569</h3>
+                <button onclick="changeMonth(1)" class="bg-slate-900 border border-slate-800 text-slate-300 hover:text-white px-3 py-1.5 rounded-xl text-xs transition cursor-pointer">
+                    เดือนถัดไป <i class="fa-solid fa-chevron-right"></i>
+                </button>
+            </div>
+            <div class="grid grid-cols-7 gap-2 text-center text-xs">
+                <div class="text-rose-400 font-semibold py-1">อา.</div>
+                <div class="text-slate-400 font-semibold py-1">จ.</div>
+                <div class="text-slate-400 font-semibold py-1">อ.</div>
+                <div class="text-slate-400 font-semibold py-1">พ.</div>
+                <div class="text-slate-400 font-semibold py-1">พฤ.</div>
+                <div class="text-slate-400 font-semibold py-1">ศ.</div>
+                <div class="text-emerald-400 font-semibold py-1">ส.</div>
+            </div>
+            <div id="calendar-grid" class="grid grid-cols-7 gap-2"></div>
+        </div>
     </div>
 
     <!-- Modals -->
@@ -161,7 +190,6 @@
                 </h3>
                 <button onclick="toggleModal('profile-modal')" class="text-slate-400 hover:text-slate-200 cursor-pointer"><i class="fa-solid fa-xmark text-base"></i></button>
             </div>
-
             <div class="space-y-3 text-xs">
                 <div class="bg-slate-900/60 p-3 rounded-xl border border-slate-800 space-y-1">
                     <p class="text-slate-400">อีเมลผู้ใช้งาน:</p>
@@ -175,18 +203,12 @@
                     <p class="text-slate-400">สถานะสิทธิ์:</p>
                     <p id="profile-role-text" class="font-semibold text-emerald-400">-</p>
                 </div>
-
                 <div class="pt-2 border-t border-slate-800 space-y-2">
                     <p class="font-semibold text-slate-300">เปลี่ยนรหัสผ่านใหม่</p>
-                    <div>
-                        <input type="password" id="new-password" placeholder="รหัสผ่านใหม่ (อย่างน้อย 6 ตัวอักษร)" class="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-100">
-                    </div>
-                    <button type="button" onclick="updatePassword()" class="w-full bg-slate-800 hover:bg-slate-700 text-slate-200 py-2 rounded-xl font-medium transition cursor-pointer">
-                        อัปเดตรหัสผ่าน
-                    </button>
+                    <input type="password" id="new-password" placeholder="รหัสผ่านใหม่ (อย่างน้อย 6 ตัวอักษร)" class="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-100">
+                    <button type="button" onclick="updatePassword()" class="w-full bg-slate-800 hover:bg-slate-700 text-slate-200 py-2 rounded-xl font-medium transition cursor-pointer">อัปเดตรหัสผ่าน</button>
                 </div>
             </div>
-
             <div class="flex justify-end pt-2 border-t border-slate-800">
                 <button type="button" onclick="toggleModal('profile-modal')" class="px-4 py-2 rounded-xl text-xs font-medium text-slate-400 bg-slate-900 border border-slate-800 cursor-pointer">ปิด</button>
             </div>
