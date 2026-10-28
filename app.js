@@ -5,6 +5,7 @@ let authMode = 'login';
 let tasks = [];
 let currentFilter = 'all';
 let realtimeSubscription = null;
+let currentCalendarDate = new Date();
 
 const ADMIN_EMAIL = 'imarm.group@gmail.com'; 
 
@@ -158,6 +159,7 @@ async function fetchTasksFromSupabase() {
     tasks = data || [];
     checkDailyRoutineReset();
     renderTasks();
+    renderCalendar();
     updateAnalytics();
 }
 
@@ -302,6 +304,91 @@ function addToCalendar(id) {
     window.open(gcalUrl, '_blank');
 }
 
+// --- Calendar View Management ---
+function switchView(viewType) {
+    const taskContainer = document.getElementById('tasks-container');
+    const calendarContainer = document.getElementById('calendar-container');
+    const btnList = document.getElementById('view-btn-list');
+    const btnCal = document.getElementById('view-btn-calendar');
+
+    if (viewType === 'list') {
+        taskContainer.classList.remove('hidden');
+        calendarContainer.classList.add('hidden');
+        btnList.className = 'bg-rose-600 text-white px-3 py-1.5 rounded-xl text-xs font-medium transition cursor-pointer';
+        btnCal.className = 'bg-slate-900 border border-slate-800 text-slate-300 hover:text-white px-3 py-1.5 rounded-xl text-xs font-medium transition cursor-pointer';
+    } else {
+        taskContainer.classList.add('hidden');
+        calendarContainer.classList.remove('hidden');
+        btnCal.className = 'bg-rose-600 text-white px-3 py-1.5 rounded-xl text-xs font-medium transition cursor-pointer';
+        btnList.className = 'bg-slate-900 border border-slate-800 text-slate-300 hover:text-white px-3 py-1.5 rounded-xl text-xs font-medium transition cursor-pointer';
+        renderCalendar();
+    }
+}
+
+function changeMonth(direction) {
+    currentCalendarDate.setMonth(currentCalendarDate.getMonth() + direction);
+    renderCalendar();
+}
+
+function renderCalendar() {
+    const gridEl = document.getElementById('calendar-grid');
+    const monthYearEl = document.getElementById('calendar-month-year');
+    if (!gridEl || !monthYearEl) return;
+
+    const year = currentCalendarDate.getFullYear();
+    const month = currentCalendarDate.getMonth();
+
+    const monthNames = ['มกราคม', 'กุมภาพันธ์', 'มีนาคม', 'เมษายน', 'พฤษภาคม', 'มิถุนายน', 'กรกฎาคม', 'สิงหาคม', 'กันยายน', 'ตุลาคม', 'พฤศจิกายน', 'ธันวาคม'];
+    monthYearEl.textContent = `${monthNames[month]} ${year + 543}`;
+
+    const firstDayIndex = new Date(year, month, 1).getDay();
+    const totalDays = new Date(year, month + 1, 0).getDate();
+
+    let html = '';
+    for (let i = 0; i < firstDayIndex; i++) {
+        html += `<div class="h-24 bg-slate-900/20 rounded-xl border border-slate-800/40 opacity-30"></div>`;
+    }
+
+    const todayStr = new Date().toISOString().split('T')[0];
+
+    for (let day = 1; day <= totalDays; day++) {
+        const formattedDay = String(day).padStart(2, '0');
+        const formattedMonth = String(month + 1).padStart(2, '0');
+        const dateStr = `${year}-${formattedMonth}-${formattedDay}`;
+
+        const dayTasks = tasks.filter(t => t.due_date === dateStr);
+        const isToday = dateStr === todayStr;
+
+        html += `
+            <div onclick="openDateModal('${dateStr}')" class="h-28 bg-slate-900/60 border ${isToday ? 'border-rose-500 shadow-lg shadow-rose-500/10' : 'border-slate-800'} rounded-xl p-1.5 flex flex-col justify-between transition hover:border-slate-600 cursor-pointer overflow-hidden">
+                <div class="flex justify-between items-center text-[11px]">
+                    <span class="font-bold ${isToday ? 'bg-rose-600 text-white px-1.5 rounded-full' : 'text-slate-300'}">${day}</span>
+                    ${dayTasks.length > 0 ? `<span class="bg-rose-500/20 text-rose-400 px-1 rounded text-[9px]">${dayTasks.length} งาน</span>` : ''}
+                </div>
+                <div class="flex-1 overflow-y-auto space-y-1 mt-1 scrollbar-none">
+                    ${dayTasks.map(t => `
+                        <div class="text-[10px] bg-slate-800/80 border border-slate-700/50 text-slate-200 px-1.5 py-0.5 rounded truncate ${t.completed ? 'line-through opacity-50' : ''}" title="${escapeHtml(t.title)}">
+                            • ${escapeHtml(t.title)}
+                        </div>
+                    `).join('')}
+                </div>
+            </div>
+        `;
+    }
+    gridEl.innerHTML = html;
+}
+
+function openDateModal(dateStr) {
+    const dueDateInput = document.getElementById('task-due-date');
+    if (dueDateInput) {
+        dueDateInput.value = dateStr;
+        switchView('list');
+        showToast(`เลือกวันที่ ${dateStr} แล้ว สามารถเพิ่มงานได้เลย`, 'success');
+        document.getElementById('task-title').focus();
+    }
+}
+
+// --- Filters & Sorting ---
 function setFilter(filterType) {
     currentFilter = filterType;
     ['all', 'pending', 'completed'].forEach(type => {
