@@ -6,7 +6,6 @@ let tasks = [];
 let currentFilter = 'all';
 let realtimeSubscription = null;
 
-// กำหนดอีเมลที่เป็น Admin (จะสามารถมองเห็นงานทั้งหมดในระบบได้)
 const ADMIN_EMAIL = 'imarm.group@gmail.com'; 
 
 window.onload = function() {
@@ -58,6 +57,7 @@ function initSupabase() {
     }
 }
 
+// --- Auth Operations ---
 function setAuthMode(mode) { authMode = mode; }
 
 async function handleAuth(e) {
@@ -103,13 +103,46 @@ function showAppUI() {
     subscribeRealtime();
 }
 
+// --- Profile & Membership Management ---
+function openProfileModal() {
+    if (!currentUser) return;
+    
+    document.getElementById('profile-email-text').textContent = currentUser.email;
+    document.getElementById('profile-id-text').textContent = currentUser.id;
+    
+    const isAdmin = currentUser.email === ADMIN_EMAIL;
+    document.getElementById('profile-role-text').innerHTML = isAdmin 
+        ? '<span class="text-rose-400 font-bold">ผู้ดูแลระบบ (Admin)</span>' 
+        : 'สมาชิกทั่วไป (Standard User)';
+        
+    document.getElementById('new-password').value = '';
+    toggleModal('profile-modal');
+}
+
+async function updatePassword() {
+    const newPassword = document.getElementById('new-password').value;
+    if (!newPassword || newPassword.length < 6) {
+        showToast('กรุณากรอกรหัสผ่านใหม่อย่างน้อย 6 ตัวอักษร', 'error');
+        return;
+    }
+
+    const { error } = await supabaseClient.auth.updateUser({ password: newPassword });
+    
+    if (error) {
+        showToast('ไม่สามารถเปลี่ยนรหัสผ่านได้: ' + error.message, 'error');
+    } else {
+        showToast('เปลี่ยนรหัสผ่านสำเร็จเรียบร้อย! 🔒', 'success');
+        document.getElementById('new-password').value = '';
+        toggleModal('profile-modal');
+    }
+}
+
 // --- Task CRUD Operations ---
 async function fetchTasksFromSupabase() {
     if (!supabaseClient || !currentUser) return;
 
     let query = supabaseClient.from('todos').select('*');
 
-    // ถ้าไม่ใช่ Admin ให้ดึงเฉพาะงานของตัวเอง
     if (currentUser.email !== ADMIN_EMAIL) {
         query = query.eq('user_id', currentUser.id);
     }
@@ -135,7 +168,6 @@ function subscribeRealtime() {
     
     let channelConfig = { event: '*', schema: 'public', table: 'todos' };
     
-    // ถ้าไม่ใช่ Admin ให้กรองเฉพาะ user_id ของตัวเองใน Realtime ด้วย
     if (currentUser.email !== ADMIN_EMAIL) {
         channelConfig.filter = `user_id=eq.${currentUser.id}`;
     }
@@ -314,9 +346,13 @@ function renderTasks() {
         }
     });
 
-    document.getElementById('count-all').textContent = tasks.length;
-    document.getElementById('count-pending').textContent = tasks.filter(t => !t.completed).length;
-    document.getElementById('count-completed').textContent = tasks.filter(t => t.completed).length;
+    const countAll = document.getElementById('count-all');
+    const countPending = document.getElementById('count-pending');
+    const countCompleted = document.getElementById('count-completed');
+
+    if (countAll) countAll.textContent = tasks.length;
+    if (countPending) countPending.textContent = tasks.filter(t => !t.completed).length;
+    if (countCompleted) countCompleted.textContent = tasks.filter(t => t.completed).length;
 
     if (!container) return;
     if (filtered.length === 0) {
